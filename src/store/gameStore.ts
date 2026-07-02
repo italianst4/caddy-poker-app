@@ -1,0 +1,388 @@
+import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { buildDrawPool, drawDistinct, type GameMode } from '../data/cards';
+import { drawCaddies } from '../data/caddyCards';
+
+export type Step =
+  | 'home'
+  | 'menu'
+  | 'howToPlay'
+  | 'count'
+  | 'names'
+  | 'holes'
+  | 'mode'
+  | 'overview'
+  | 'round'
+  | 'scorecard'
+  | 'results'
+  | 'caddy'
+  | 'caddyResults';
+
+export type Phase = 'pick' | 'transition' | 'score' | 'matchup';
+export type Result = 'achieved' | 'failed';
+
+/** Poker cards awarded for winning a matchup hole. */
+export const MATCHUP_REWARD = 2;
+
+type MatchupState = { cardId: string; winner: number | null };
+
+type GameState = {
+  // ---- navigation ----
+  step: Step;
+  /** Transition to play for the most recent step change ('push' | 'pop' | null = instant). */
+  transition: 'push' | 'pop' | null;
+  /** Step the scorecard was opened from, so its back arrow pops to the right place. */
+  scorecardReturn: Step;
+
+  // ---- config ----
+  players: string[]; // length 2–4
+  avatars: number[]; // golfer character index per player
+  holes: 9 | 18;
+  mode: GameMode;
+  noPokerDeck: boolean; // play challenges only — no poker hand / caddy finale
+  musicVolume: number; // background-music volume, 0..1
+  musicMuted: boolean; // background-music mute toggle
+
+  // ---- round state ----
+  currentHole: number; // 1-based
+  phase: Phase;
+  pickTurn: number; // position within pickOrder of whose turn it is to pick
+  pickOrder: number[]; // randomized player indices for the current hole's pick order
+  holeCards: Record<number, string[]>; // hole -> card ids (index = position)
+  assignment: Record<number, Record<number, number>>; // hole -> playerIdx -> position
+  results: Record<number, Record<number, Result>>; // hole -> playerIdx -> result
+  matchup: Record<number, MatchupState>; // hole -> matchup info (present iff a matchup hole)
+
+  // ---- caddy draw (after the round) ----
+  caddyCards: string[]; // 9 caddy card ids shown in the 3×3 grid
+  caddyAssignment: Record<number, number>; // playerIdx -> chosen position
+  caddyTurn: number; // index of the golfer currently drawing a caddy
+
+  // ---- navigation actions ----
+  goTo: (step: Step, transition?: 'push' | 'pop') => void;
+  viewScorecard: (from: Step) => void;
+
+  // ---- config actions ----
+  setPlayerCount: (n: number) => void;
+  setPlayerName: (index: number, name: string) => void;
+  setPlayers: (names: string[], avatars: number[]) => void;
+  setHoles: (h: 9 | 18) => void;
+  setMode: (m: GameMode) => void;
+  setNoPokerDeck: (v: boolean) => void;
+  setMusicVolume: (v: number) => void;
+  setMusicMuted: (m: boolean) => void;
+  toggleMusicMuted: () => void;
+
+  // ---- round actions ----
+  startRound: () => void;
+  pickCard: (position: number) => void;
+  redrawCard: (position: number) => void;
+  startCaddyDraw: () => void;
+  pickCaddy: (position: number) => void;
+  advanceCaddyTurn: () => void;
+  advanceTurn: () => void;
+  triggerMatchup: (cardId: string) => void;
+  setMatchupWinner: (playerIdx: number) => void;
+  beginScoring: () => void;
+  markResult: (playerIdx: number, result: Result) => void;
+  setHoleResult: (hole: number, playerIdx: number, result: Result) => void;
+  setHoleMatchupWinner: (hole: number, winner: number | null) => void;
+  nextHole: () => void;
+  reset: () => void;
+
+  // ---- derived ----
+  pokerCardCount: (playerIdx: number) => number;
+  challengesWon: (playerIdx: number) => number;
+  pickedPositions: () => number[];
+};
+
+const DEFAULT_NAMES = ['Player 1', 'Player 2', 'Player 3', 'Player 4'];
+
+/** Always show 4 cards per hole, regardless of player count. */
+const CARDS_PER_HOLE = 4;
+
+function drawCardsFor(state: Pick<GameState, 'mode'>): string[] {
+  const pool = buildDrawPool(state.mode);
+  return drawDistinct(pool, CARDS_PER_HOLE).map((c) => c.id);
+}
+
+/** A shuffled list of player indices [0..n-1] (Fisher–Yates). */
+function shuffledOrder(n: number): number[] {
+  const order = Array.from({ length: n }, (_, i) => i);
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+  return order;
+}
+
+export const useGame = create<GameState>()(
+  persist(
+    (set, get) => ({
+      step: 'home',
+      transition: null,
+      scorecardReturn: 'round',
+
+      players: ['', ''],
+      avatars: [],
+      holes: 9,
+      mode: 'amateur',
+      noPokerDeck: false,
+      musicVolume: 0.6,
+      musicMuted: false,
+
+      currentHole: 1,
+      phase: 'pick',
+      pickTurn: 0,
+      pickOrder: [0, 1],
+      holeCards: {},
+      assignment: {},
+      results: {},
+      matchup: {},
+      caddyCards: [],
+      caddyAssignment: {},
+      caddyTurn: 0,
+
+      goTo: (step, transition) => set({ step, transition: transition ?? null }),
+
+      viewScorecard: (from) => set({ scorecardReturn: from, step: 'scorecard', transition: 'push' }),
+
+      setPlayerCount: (n) =>
+        set((s) => {
+          const count = Math.max(2, Math.min(4, n));
+          // Keep typed names; leave the rest blank (shown as placeholders). startRound
+          // backfills any blanks with "Player N".
+          const players = Array.from({ length: count }, (_, i) => s.players[i] ?? '');
+          return { players };
+        }),
+
+      setPlayerName: (index, name) =>
+        set((s) => {
+          const players = s.players.slice();
+          players[index] = name;
+          return { players };
+        }),
+
+      setPlayers: (names, avatars) => set({ players: names, avatars }),
+
+      setHoles: (holes) => set({ holes }),
+      setMode: (mode) => set({ mode }),
+      setNoPokerDeck: (noPokerDeck) => set({ noPokerDeck }),
+      setMusicVolume: (v) => set({ musicVolume: Math.max(0, Math.min(1, v)) }),
+      setMusicMuted: (musicMuted) => set({ musicMuted }),
+      toggleMusicMuted: () => set((s) => ({ musicMuted: !s.musicMuted })),
+
+      startRound: () =>
+        set((s) => {
+          const players = s.players.map((p, i) => (p.trim() === '' ? DEFAULT_NAMES[i] : p));
+          const firstHole = drawCardsFor({ mode: s.mode });
+          return {
+            players,
+            step: 'round',
+            currentHole: 1,
+            phase: 'pick',
+            pickTurn: 0,
+            pickOrder: shuffledOrder(players.length),
+            holeCards: { 1: firstHole },
+            assignment: {},
+            results: {},
+            matchup: {},
+          };
+        }),
+
+      pickCard: (position) =>
+        set((s) => {
+          const playerIdx = s.pickOrder[s.pickTurn] ?? s.pickTurn;
+          const holeAssign = { ...(s.assignment[s.currentHole] ?? {}) };
+          holeAssign[playerIdx] = position;
+          return { assignment: { ...s.assignment, [s.currentHole]: holeAssign } };
+        }),
+
+      // After the round: draw 9 random caddies and let each golfer pick one.
+      startCaddyDraw: () =>
+        set({
+          caddyCards: drawCaddies(9),
+          caddyAssignment: {},
+          caddyTurn: 0,
+          step: 'caddy',
+          transition: 'push',
+        }),
+
+      pickCaddy: (position) =>
+        set((s) => ({ caddyAssignment: { ...s.caddyAssignment, [s.caddyTurn]: position } })),
+
+      advanceCaddyTurn: () =>
+        set((s) => {
+          if (s.caddyTurn < s.players.length - 1) {
+            return { caddyTurn: s.caddyTurn + 1 };
+          }
+          return { step: 'caddyResults' as Step, transition: 'push' as const };
+        }),
+
+      // Replace the card at `position` with a fresh random draw (different from the current).
+      redrawCard: (position) =>
+        set((s) => {
+          const pool = buildDrawPool(s.mode);
+          const currentId = s.holeCards[s.currentHole]?.[position];
+          const candidates = pool.filter((c) => c.id !== currentId);
+          const nextId = drawDistinct(candidates, 1)[0]?.id ?? currentId;
+          const holeCards = (s.holeCards[s.currentHole] ?? []).slice();
+          holeCards[position] = nextId;
+          return { holeCards: { ...s.holeCards, [s.currentHole]: holeCards } };
+        }),
+
+      advanceTurn: () =>
+        set((s) => {
+          if (s.pickTurn < s.players.length - 1) {
+            return { pickTurn: s.pickTurn + 1 };
+          }
+          return { phase: 'transition' as Phase };
+        }),
+
+      // A matchup card was flipped: the whole hole becomes a single head-to-head.
+      // Remaining players don't pick; earlier picks are ignored for scoring.
+      triggerMatchup: (cardId) =>
+        set((s) => ({
+          phase: 'matchup' as Phase,
+          matchup: { ...s.matchup, [s.currentHole]: { cardId, winner: null } },
+        })),
+
+      setMatchupWinner: (playerIdx) =>
+        set((s) => {
+          const existing = s.matchup[s.currentHole];
+          if (!existing) return {};
+          return {
+            matchup: { ...s.matchup, [s.currentHole]: { ...existing, winner: playerIdx } },
+          };
+        }),
+
+      beginScoring: () => set({ phase: 'score' }),
+
+      markResult: (playerIdx, result) =>
+        set((s) => {
+          const holeResults = { ...(s.results[s.currentHole] ?? {}) };
+          holeResults[playerIdx] = result;
+          return { results: { ...s.results, [s.currentHole]: holeResults } };
+        }),
+
+      // Correct a specific hole's result (used by the scorecard's "Incorrect?" flow).
+      setHoleResult: (hole, playerIdx, result) =>
+        set((s) => {
+          const holeResults = { ...(s.results[hole] ?? {}) };
+          holeResults[playerIdx] = result;
+          return { results: { ...s.results, [hole]: holeResults } };
+        }),
+
+      // Correct a specific hole's matchup winner (null = no winner).
+      setHoleMatchupWinner: (hole, winner) =>
+        set((s) => {
+          const existing = s.matchup[hole];
+          if (!existing) return {};
+          return { matchup: { ...s.matchup, [hole]: { ...existing, winner } } };
+        }),
+
+      nextHole: () =>
+        set((s) => {
+          if (s.currentHole < s.holes) {
+            const next = s.currentHole + 1;
+            const cards = drawCardsFor({ mode: s.mode });
+            return {
+              currentHole: next,
+              phase: 'pick' as Phase,
+              pickTurn: 0,
+              pickOrder: shuffledOrder(s.players.length),
+              holeCards: { ...s.holeCards, [next]: cards },
+            };
+          }
+          return { step: 'results' as Step };
+        }),
+
+      reset: () =>
+        set({
+          step: 'home',
+          transition: null,
+          players: ['', ''],
+          avatars: [],
+          holes: 9,
+          // mode (black-tees setting) is a persistent menu preference — not reset here.
+          currentHole: 1,
+          phase: 'pick',
+          pickTurn: 0,
+          pickOrder: [0, 1],
+          holeCards: {},
+          assignment: {},
+          results: {},
+          matchup: {},
+          caddyCards: [],
+          caddyAssignment: {},
+          caddyTurn: 0,
+        }),
+
+      // Final poker-card tally: matchup winner gets MATCHUP_REWARD; otherwise +1 per Achieved.
+      pokerCardCount: (playerIdx) => {
+        const { results, matchup, holes } = get();
+        let count = 0;
+        for (let hole = 1; hole <= holes; hole++) {
+          const m = matchup[hole];
+          if (m) {
+            if (m.winner === playerIdx) count += MATCHUP_REWARD;
+            continue;
+          }
+          if (results[hole]?.[playerIdx] === 'achieved') count++;
+        }
+        return count;
+      },
+
+      // Challenges won: an Achieved result counts; on a matchup hole, the matchup winner wins it.
+      challengesWon: (playerIdx) => {
+        const { results, matchup, holes } = get();
+        let count = 0;
+        for (let hole = 1; hole <= holes; hole++) {
+          const m = matchup[hole];
+          if (m) {
+            if (m.winner === playerIdx) count++;
+            continue;
+          }
+          if (results[hole]?.[playerIdx] === 'achieved') count++;
+        }
+        return count;
+      },
+
+      pickedPositions: () => {
+        const s = get();
+        const holeAssign = s.assignment[s.currentHole] ?? {};
+        return Object.values(holeAssign);
+      },
+    }),
+    {
+      name: 'caddy-game',
+      // Bump when the persisted round shape changes — old saved rounds are then discarded
+      // so the app boots fresh at the home screen instead of resuming a stale round.
+      version: 2,
+      storage: createJSONStorage(() => AsyncStorage),
+      // Persist only data (not action functions) so a backgrounded round resumes.
+      partialize: (s) => ({
+        step: s.step,
+        players: s.players,
+        avatars: s.avatars,
+        holes: s.holes,
+        mode: s.mode,
+        noPokerDeck: s.noPokerDeck,
+        musicVolume: s.musicVolume,
+        musicMuted: s.musicMuted,
+        currentHole: s.currentHole,
+        phase: s.phase,
+        pickTurn: s.pickTurn,
+        pickOrder: s.pickOrder,
+        holeCards: s.holeCards,
+        assignment: s.assignment,
+        results: s.results,
+        matchup: s.matchup,
+        caddyCards: s.caddyCards,
+        caddyAssignment: s.caddyAssignment,
+        caddyTurn: s.caddyTurn,
+      }),
+    }
+  )
+);
