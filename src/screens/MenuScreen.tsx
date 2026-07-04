@@ -11,6 +11,7 @@ import {
 import { LandscapeBackground } from '../components/LandscapeBackground';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useGame } from '../store/gameStore';
+import { playGolfHit } from '../sounds';
 import { colors, radius, spacing } from '../theme';
 
 export function MenuScreen() {
@@ -18,6 +19,8 @@ export function MenuScreen() {
   const setMode = useGame((s) => s.setMode);
   const noPokerDeck = useGame((s) => s.noPokerDeck);
   const setNoPokerDeck = useGame((s) => s.setNoPokerDeck);
+  const useVirtualPokerDeck = useGame((s) => s.useVirtualPokerDeck);
+  const setUseVirtualPokerDeck = useGame((s) => s.setUseVirtualPokerDeck);
   const goTo = useGame((s) => s.goTo);
   const { height } = useWindowDimensions();
 
@@ -48,7 +51,7 @@ export function MenuScreen() {
             />
           </View>
 
-          <View style={[styles.settingRow, styles.lastSettingRow]}>
+          <View style={styles.settingRow}>
             <View style={styles.settingText}>
               <Text style={styles.settingLabel}>Play Without Poker Deck</Text>
               <Text style={styles.settingNote}>Play challenges only, no poker hand finale</Text>
@@ -61,8 +64,25 @@ export function MenuScreen() {
             />
           </View>
 
+          <View style={[styles.settingRow, styles.lastSettingRow, noPokerDeck && styles.settingDisabled]}>
+            <View style={styles.settingText}>
+              <Text style={styles.settingLabel}>Use Virtual Poker Deck</Text>
+              <Text style={styles.settingNote}>Play the poker finale in-app with a virtual deck</Text>
+            </View>
+            <Switch
+              value={useVirtualPokerDeck}
+              onValueChange={setUseVirtualPokerDeck}
+              disabled={noPokerDeck}
+              trackColor={{ true: colors.primary, false: 'rgba(255,255,255,0.25)' }}
+              thumbColor={colors.white}
+            />
+          </View>
+
           <Pressable
-            onPress={() => goTo('howToPlay', 'push')}
+            onPress={() => {
+              playGolfHit();
+              goTo('howToPlay', 'push');
+            }}
             style={({ pressed }) => [styles.restoreBtn, pressed && styles.pressed]}
           >
             <Text style={styles.restoreText}>How To Play</Text>
@@ -95,6 +115,7 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.lg,
   },
   lastSettingRow: { marginBottom: spacing.xl * 2 },
+  settingDisabled: { opacity: 0.4 },
   settingText: { flexShrink: 1, gap: 2 },
   settingLabel: { color: colors.text, fontSize: 17, fontWeight: '800' },
   settingNote: { color: colors.black, fontSize: 13, fontWeight: '500' },

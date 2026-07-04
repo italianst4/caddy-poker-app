@@ -17,6 +17,7 @@ import { ModeScreen } from './src/screens/ModeScreen';
 import { OverviewScreen } from './src/screens/OverviewScreen';
 import { RoundScreen } from './src/screens/RoundScreen';
 import { ResultsScreen } from './src/screens/ResultsScreen';
+import { PokerRoundScreen } from './src/screens/PokerRoundScreen';
 import { Scorecard } from './src/components/Scorecard';
 
 export default function App() {
@@ -84,6 +85,8 @@ function renderStep(step: Step) {
       return <CaddyDrawScreen />;
     case 'caddyResults':
       return <CaddyResultsScreen />;
+    case 'poker':
+      return <PokerRoundScreen />;
     default:
       return <HomeScreen />;
   }

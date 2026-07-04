@@ -12,8 +12,10 @@ export function ResultsScreen() {
   const pokerCardCount = useGame((s) => s.pokerCardCount);
   const challengesWon = useGame((s) => s.challengesWon);
   const noPokerDeck = useGame((s) => s.noPokerDeck);
+  const useVirtualPokerDeck = useGame((s) => s.useVirtualPokerDeck);
   const viewScorecard = useGame((s) => s.viewScorecard);
   const startCaddyDraw = useGame((s) => s.startCaddyDraw);
+  const startPokerRound = useGame((s) => s.startPokerRound);
   const reset = useGame((s) => s.reset);
 
   const gap = spacing.lg;
@@ -26,6 +28,53 @@ export function ResultsScreen() {
       { text: 'Game Over', onPress: () => reset() },
     ]);
   };
+
+  // ---- Virtual poker mode: hand off to the in-app poker finale. ----
+  if (useVirtualPokerDeck) {
+    return (
+      <ScreenLayout
+        title="Let's play poker!"
+        scroll
+        footer={
+          <>
+            <PrimaryButton label="Play Poker" onPress={startPokerRound} />
+            <Pressable
+              onPress={() => viewScorecard('results')}
+              style={({ pressed }) => [styles.textBtn, pressed && styles.textBtnPressed]}
+            >
+              <Text style={styles.textBtnLabel}>View Scorecard</Text>
+            </Pressable>
+          </>
+        }
+      >
+        <Text style={styles.deal}>
+          Each golfer will get the following number of poker cards. Whoever makes best hand wins!
+        </Text>
+
+        <View style={[styles.golfers, { width: columnWidth * 2 + gap, gap }]}>
+          {players.map((name, i) => {
+            const g = GOLFERS[avatars[i] ?? i] ?? GOLFERS[0];
+            const count = pokerCardCount(i);
+            return (
+              <View key={i} style={[styles.golfer, { width: columnWidth }]}>
+                <Image
+                  source={g.source}
+                  resizeMode="contain"
+                  style={{ width: cellH * g.ratio, height: cellH }}
+                />
+                <Text style={styles.name} numberOfLines={1}>
+                  {name}
+                </Text>
+                <Text style={styles.count}>
+                  {count} {count === 1 ? 'card' : 'cards'}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+      </ScreenLayout>
+    );
+  }
 
   // ---- Challenges-only mode: crown whoever won the most challenges. ----
   if (noPokerDeck) {

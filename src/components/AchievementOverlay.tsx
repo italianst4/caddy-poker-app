@@ -49,7 +49,7 @@ function FlyingCard({ card, from, to }: { card: Card; from: Rect; to: Rect }) {
 }
 
 /* ---------------- bottom slide-up message ---------------- */
-function BottomToast({ message }: { message: string }) {
+function BottomToast({ message, bottom }: { message: string; bottom: number }) {
   const p = useSharedValue(0);
   useEffect(() => {
     // Wait for the card to fly up first, then slide in, hold a beat, slide out.
@@ -68,7 +68,7 @@ function BottomToast({ message }: { message: string }) {
   }));
 
   return (
-    <Animated.View style={[styles.toast, style]}>
+    <Animated.View style={[styles.toast, { bottom }, style]}>
       <Text style={styles.toastText}>🎉 {message}</Text>
     </Animated.View>
   );
@@ -81,9 +81,11 @@ type Props = {
   to: Rect;
   message: string;
   onDone: () => void;
+  /** Distance of the toast from the bottom — raise it so it clears the slide-up footer. */
+  toastBottom?: number;
 };
 
-export function AchievementOverlay({ card, from, to, message, onDone }: Props) {
+export function AchievementOverlay({ card, from, to, message, onDone, toastBottom = 48 }: Props) {
   useEffect(() => {
     // Long enough to cover: card flight + delayed toast (400 + 320 + 1350 + 320).
     const id = setTimeout(onDone, 2450);
@@ -97,7 +99,7 @@ export function AchievementOverlay({ card, from, to, message, onDone }: Props) {
     <View pointerEvents="none" style={styles.overlay}>
       <ConfettiBurst originX={originX} originY={originY} />
       <FlyingCard card={card} from={from} to={to} />
-      <BottomToast message={message} />
+      <BottomToast message={message} bottom={toastBottom} />
     </View>
   );
 }
@@ -116,7 +118,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: spacing.lg,
     right: spacing.lg,
-    bottom: 48,
     backgroundColor: colors.bgElevated,
     borderRadius: radius.lg,
     borderWidth: 2,

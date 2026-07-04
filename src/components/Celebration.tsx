@@ -6,6 +6,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withDelay,
+  withRepeat,
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
@@ -13,7 +14,7 @@ import { colors, radius, spacing } from '../theme';
 
 const CONFETTI_COLORS = ['#FFD66B', '#34C759', '#FF6B6B', '#4DA3FF', '#FF9F40', '#B47CFF'];
 const PIECES = 44;
-const DURATION_MS = 1900;
+const DEFAULT_DURATION_MS = 1900;
 
 type PieceProps = { width: number; height: number };
 
@@ -36,9 +37,11 @@ function ConfettiPiece({ width, height }: PieceProps) {
   const progress = useSharedValue(0);
 
   useEffect(() => {
+    // Loop the fall so the confetti keeps raining for the whole celebration. Each cycle
+    // resets to the top (off-screen) and falls again — so long celebrations stay full.
     progress.value = withDelay(
       cfg.delay,
-      withTiming(1, { duration: cfg.duration, easing: Easing.out(Easing.quad) })
+      withRepeat(withTiming(1, { duration: cfg.duration, easing: Easing.out(Easing.quad) }), -1, false)
     );
   }, [progress, cfg]);
 
@@ -70,21 +73,23 @@ function ConfettiPiece({ width, height }: PieceProps) {
 type Props = {
   message: string;
   onDone: () => void;
+  /** How long the celebration stays up before auto-dismissing (default 1.9s). */
+  durationMs?: number;
 };
 
 /**
  * A transient full-screen celebration: confetti rains down behind a popped-in message
- * banner. Auto-dismisses after a moment; tap anywhere to dismiss early.
+ * banner. Auto-dismisses after `durationMs`; tap anywhere to dismiss early.
  */
-export function Celebration({ message, onDone }: Props) {
+export function Celebration({ message, onDone, durationMs = DEFAULT_DURATION_MS }: Props) {
   const { width, height } = useWindowDimensions();
   const pop = useSharedValue(0);
 
   useEffect(() => {
     pop.value = withSpring(1, { damping: 11, stiffness: 140 });
-    const id = setTimeout(onDone, DURATION_MS);
+    const id = setTimeout(onDone, durationMs);
     return () => clearTimeout(id);
-  }, [pop, onDone]);
+  }, [pop, onDone, durationMs]);
 
   const bannerStyle = useAnimatedStyle(() => ({
     opacity: pop.value,

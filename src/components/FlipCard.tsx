@@ -15,11 +15,13 @@ import Animated, {
   withDelay,
   withTiming,
 } from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 import { CardArt } from './CardArt';
 import { CardBack } from './CardBack';
 import { SunRays } from './SunRays';
 import { CARD_RATIO, colors, radius, spacing } from '../theme';
 import { isMatchup, type Card } from '../data/cards';
+import { playCardFlip } from '../sounds';
 
 type Props = {
   card: Card;
@@ -44,10 +46,16 @@ export function FlipCard({ card, playerName, onDismiss, onRedraw, acceptLabel = 
   const progress = useSharedValue(0);
 
   useEffect(() => {
+    // Play the flip sound + haptic as the flip animation begins (it starts after a 300ms delay).
+    const flipId = setTimeout(() => {
+      playCardFlip();
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    }, 100);
     progress.value = withDelay(
       300,
       withTiming(1, { duration: 750, easing: Easing.out(Easing.cubic) })
     );
+    return () => clearTimeout(flipId);
   }, [progress]);
 
   const frontStyle = useAnimatedStyle(() => ({

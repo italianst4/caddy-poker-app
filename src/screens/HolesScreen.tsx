@@ -2,6 +2,7 @@ import { Pressable, SafeAreaView, StyleSheet, Text, useWindowDimensions, View } 
 import { LandscapeBackground } from '../components/LandscapeBackground';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useGame } from '../store/gameStore';
+import { playGolfHit } from '../sounds';
 import { colors, radius, spacing } from '../theme';
 
 const OPTIONS: (9 | 18)[] = [9, 18];
@@ -15,6 +16,7 @@ export function HolesScreen() {
   const squareSize = Math.min(width * 0.6, 230);
 
   const choose = (h: 9 | 18) => {
+    playGolfHit();
     setHoles(h);
     goTo('overview');
   };

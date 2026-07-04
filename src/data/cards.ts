@@ -8,6 +8,10 @@ export type Card = {
   name: string;
   type: CardType;
   image: ImageSourcePropType;
+  /** Caddy cards: the rule text printed on the card (transcribed from the art). */
+  details?: string;
+  /** Caddy cards: the card's category label (e.g. "Wild Card", "Suit Manipulation"). */
+  category?: string;
 };
 
 /**

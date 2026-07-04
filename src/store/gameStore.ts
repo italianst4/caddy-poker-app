@@ -2,7 +2,8 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { buildDrawPool, drawDistinct, type GameMode } from '../data/cards';
-import { drawCaddies } from '../data/caddyCards';
+import { drawCaddies, caddyEffect } from '../data/caddyCards';
+import { buildDeck, shuffle, type PokerCard } from '../data/pokerDeck';
 
 export type Step =
   | 'home'
@@ -17,13 +18,20 @@ export type Step =
   | 'scorecard'
   | 'results'
   | 'caddy'
-  | 'caddyResults';
+  | 'caddyResults'
+  | 'poker';
 
 export type Phase = 'pick' | 'transition' | 'score' | 'matchup';
 export type Result = 'achieved' | 'failed';
 
+/** Sub-phases of the in-app virtual-poker finale (see PokerRoundScreen). */
+export type PokerPhase = 'intro' | 'ready' | 'caddy' | 'deal' | 'select' | 'allIn' | 'reveal';
+
 /** Poker cards awarded for winning a matchup hole. */
 export const MATCHUP_REWARD = 2;
+
+/** Most virtual cards dealt to one player (fits a 6×3 grid). */
+export const MAX_POKER_CARDS = 18;
 
 type MatchupState = { cardId: string; winner: number | null };
 
@@ -41,6 +49,7 @@ type GameState = {
   holes: 9 | 18;
   mode: GameMode;
   noPokerDeck: boolean; // play challenges only — no poker hand / caddy finale
+  useVirtualPokerDeck: boolean; // play the poker finale in-app with a virtual deck
   musicVolume: number; // background-music volume, 0..1
   musicMuted: boolean; // background-music mute toggle
 
@@ -59,6 +68,16 @@ type GameState = {
   caddyAssignment: Record<number, number>; // playerIdx -> chosen position
   caddyTurn: number; // index of the golfer currently drawing a caddy
 
+  // ---- virtual poker finale (when useVirtualPokerDeck) ----
+  pokerPhase: PokerPhase;
+  pokerTurn: number; // playerIdx currently building a hand (-1 = none/no participants)
+  pokerDeck: PokerCard[]; // shared shuffled 52-card deck
+  pokerDealt: number; // cursor into pokerDeck
+  pokerCaddyAssignment: Record<number, number>; // playerIdx -> position in the 9-caddy grid
+  pokerHands: Record<number, PokerCard[]>; // playerIdx -> dealt cards
+  pokerSelection: Record<number, string[]>; // playerIdx -> chosen card ids (≤5)
+  pokerMulliganOffer: Record<number, PokerCard[]>; // playerIdx -> extra cards to keep 1 of (Mulligan Draw)
+
   // ---- navigation actions ----
   goTo: (step: Step, transition?: 'push' | 'pop') => void;
   viewScorecard: (from: Step) => void;
@@ -70,6 +89,7 @@ type GameState = {
   setHoles: (h: 9 | 18) => void;
   setMode: (m: GameMode) => void;
   setNoPokerDeck: (v: boolean) => void;
+  setUseVirtualPokerDeck: (v: boolean) => void;
   setMusicVolume: (v: number) => void;
   setMusicMuted: (m: boolean) => void;
   toggleMusicMuted: () => void;
@@ -82,6 +102,18 @@ type GameState = {
   pickCaddy: (position: number) => void;
   advanceCaddyTurn: () => void;
   advanceTurn: () => void;
+
+  // ---- virtual poker actions ----
+  startPokerRound: () => void;
+  beginPokerReady: () => void; // intro "Start" -> first player's ready screen
+  pokerReady: () => void; // "Yes, ready" -> caddy pick
+  pickPokerCaddy: (position: number) => void; // -> deal
+  dealPokerCards: () => void; // deal current player's cards -> select
+  togglePokerCard: (id: string) => void;
+  keepMulliganCard: (id: string) => void; // Mulligan Draw: keep one offered card, discard the rest
+  lockPokerHand: () => void; // -> next player's ready, or all-in
+  revealPoker: () => void; // all-in -> reveal
+
   triggerMatchup: (cardId: string) => void;
   setMatchupWinner: (playerIdx: number) => void;
   beginScoring: () => void;
@@ -107,6 +139,30 @@ function drawCardsFor(state: Pick<GameState, 'mode'>): string[] {
   return drawDistinct(pool, CARDS_PER_HOLE).map((c) => c.id);
 }
 
+/**
+ * Draw `k` cards from the shared deck at `cursor`. If the deck runs out (possible when the
+ * combined earned counts exceed 52), it's refilled with a fresh shuffle — later players may
+ * then share cards with earlier ones, but no single deal ever fails.
+ */
+function takeCards(
+  deck: PokerCard[],
+  cursor: number,
+  k: number
+): { cards: PokerCard[]; deck: PokerCard[]; cursor: number } {
+  let d = deck;
+  let c = cursor;
+  const cards: PokerCard[] = [];
+  for (let i = 0; i < k; i++) {
+    if (c >= d.length) {
+      d = shuffle(buildDeck());
+      c = 0;
+    }
+    cards.push(d[c]);
+    c++;
+  }
+  return { cards, deck: d, cursor: c };
+}
+
 /** A shuffled list of player indices [0..n-1] (Fisher–Yates). */
 function shuffledOrder(n: number): number[] {
   const order = Array.from({ length: n }, (_, i) => i);
@@ -129,6 +185,7 @@ export const useGame = create<GameState>()(
       holes: 9,
       mode: 'amateur',
       noPokerDeck: false,
+      useVirtualPokerDeck: false,
       musicVolume: 0.6,
       musicMuted: false,
 
@@ -143,6 +200,15 @@ export const useGame = create<GameState>()(
       caddyCards: [],
       caddyAssignment: {},
       caddyTurn: 0,
+
+      pokerPhase: 'intro',
+      pokerTurn: -1,
+      pokerDeck: [],
+      pokerDealt: 0,
+      pokerCaddyAssignment: {},
+      pokerHands: {},
+      pokerSelection: {},
+      pokerMulliganOffer: {},
 
       goTo: (step, transition) => set({ step, transition: transition ?? null }),
 
@@ -168,7 +234,10 @@ export const useGame = create<GameState>()(
 
       setHoles: (holes) => set({ holes }),
       setMode: (mode) => set({ mode }),
-      setNoPokerDeck: (noPokerDeck) => set({ noPokerDeck }),
+      // The two poker toggles are mutually exclusive — enabling one disables the other.
+      setNoPokerDeck: (v) => set(v ? { noPokerDeck: true, useVirtualPokerDeck: false } : { noPokerDeck: false }),
+      setUseVirtualPokerDeck: (v) =>
+        set(v ? { useVirtualPokerDeck: true, noPokerDeck: false } : { useVirtualPokerDeck: false }),
       setMusicVolume: (v) => set({ musicVolume: Math.max(0, Math.min(1, v)) }),
       setMusicMuted: (musicMuted) => set({ musicMuted }),
       toggleMusicMuted: () => set((s) => ({ musicMuted: !s.musicMuted })),
@@ -219,6 +288,105 @@ export const useGame = create<GameState>()(
           }
           return { step: 'caddyResults' as Step, transition: 'push' as const };
         }),
+
+      // ---- virtual poker finale ----
+      // Replaces the physical results→caddy→caddyResults flow when useVirtualPokerDeck is on.
+      startPokerRound: () =>
+        set((s) => {
+          const firstParticipant = s.players.findIndex((_, i) => get().pokerCardCount(i) > 0);
+          return {
+            step: 'poker' as Step,
+            transition: 'push' as const,
+            pokerPhase: 'intro' as PokerPhase,
+            pokerTurn: firstParticipant,
+            pokerDeck: shuffle(buildDeck()),
+            pokerDealt: 0,
+            caddyCards: drawCaddies(9),
+            pokerCaddyAssignment: {},
+            pokerHands: {},
+            pokerSelection: {},
+            pokerMulliganOffer: {},
+          };
+        }),
+
+      // Intro "Start" → first player's ready screen (or straight to reveal if nobody earned cards).
+      beginPokerReady: () =>
+        set((s) => (s.pokerTurn < 0 ? { pokerPhase: 'allIn' as PokerPhase } : { pokerPhase: 'ready' as PokerPhase })),
+
+      pokerReady: () => set({ pokerPhase: 'caddy' }),
+
+      pickPokerCaddy: (position) =>
+        set((s) => ({
+          pokerCaddyAssignment: { ...s.pokerCaddyAssignment, [s.pokerTurn]: position },
+          pokerPhase: 'deal' as PokerPhase,
+        })),
+
+      dealPokerCards: () =>
+        set((s) => {
+          const idx = s.pokerTurn;
+          if (idx < 0 || s.pokerHands[idx]) return { pokerPhase: 'select' as PokerPhase };
+
+          const effect = caddyEffect(s.caddyCards[s.pokerCaddyAssignment[idx]]);
+          // Mulligan Draw: deal an extra "offer" of cards the player keeps `keep` of, so
+          // reserve those slots in the 18-card cap.
+          const keep = effect.kind === 'drawKeep' ? effect.keep : 0;
+          const baseCount = Math.min(get().pokerCardCount(idx), MAX_POKER_CARDS - keep);
+
+          let { cards, deck, cursor } = takeCards(s.pokerDeck, s.pokerDealt, baseCount);
+          let offer: PokerCard[] = [];
+          if (effect.kind === 'drawKeep') {
+            const drawn = takeCards(deck, cursor, effect.draw);
+            offer = drawn.cards;
+            deck = drawn.deck;
+            cursor = drawn.cursor;
+          }
+
+          return {
+            pokerDeck: deck,
+            pokerDealt: cursor,
+            pokerHands: { ...s.pokerHands, [idx]: cards },
+            pokerMulliganOffer: offer.length ? { ...s.pokerMulliganOffer, [idx]: offer } : s.pokerMulliganOffer,
+            pokerPhase: 'select' as PokerPhase,
+          };
+        }),
+
+      togglePokerCard: (id) =>
+        set((s) => {
+          const idx = s.pokerTurn;
+          const current = s.pokerSelection[idx] ?? [];
+          const next = current.includes(id)
+            ? current.filter((c) => c !== id)
+            : current.length >= 5
+              ? current
+              : [...current, id];
+          return { pokerSelection: { ...s.pokerSelection, [idx]: next } };
+        }),
+
+      // Mulligan Draw caddy: keep one of the offered cards (added to the hand), discard the rest.
+      keepMulliganCard: (id) =>
+        set((s) => {
+          const idx = s.pokerTurn;
+          const offer = s.pokerMulliganOffer[idx];
+          const kept = offer?.find((c) => c.id === id);
+          if (!kept) return {};
+          const nextOffer = { ...s.pokerMulliganOffer };
+          delete nextOffer[idx];
+          return {
+            pokerHands: { ...s.pokerHands, [idx]: [...(s.pokerHands[idx] ?? []), kept] },
+            pokerMulliganOffer: nextOffer,
+          };
+        }),
+
+      lockPokerHand: () =>
+        set((s) => {
+          const next = s.players.findIndex((_, i) => i > s.pokerTurn && get().pokerCardCount(i) > 0);
+          if (next >= 0) {
+            return { pokerTurn: next, pokerPhase: 'ready' as PokerPhase };
+          }
+          return { pokerPhase: 'allIn' as PokerPhase };
+        }),
+
+      revealPoker: () => set({ pokerPhase: 'reveal' }),
 
       // Replace the card at `position` with a fresh random draw (different from the current).
       redrawCard: (position) =>
@@ -317,6 +485,14 @@ export const useGame = create<GameState>()(
           caddyCards: [],
           caddyAssignment: {},
           caddyTurn: 0,
+          pokerPhase: 'intro',
+          pokerTurn: -1,
+          pokerDeck: [],
+          pokerDealt: 0,
+          pokerCaddyAssignment: {},
+          pokerHands: {},
+          pokerSelection: {},
+          pokerMulliganOffer: {},
         }),
 
       // Final poker-card tally: matchup winner gets MATCHUP_REWARD; otherwise +1 per Achieved.
@@ -359,7 +535,7 @@ export const useGame = create<GameState>()(
       name: 'caddy-game',
       // Bump when the persisted round shape changes — old saved rounds are then discarded
       // so the app boots fresh at the home screen instead of resuming a stale round.
-      version: 2,
+      version: 3,
       storage: createJSONStorage(() => AsyncStorage),
       // Persist only data (not action functions) so a backgrounded round resumes.
       partialize: (s) => ({
@@ -369,6 +545,7 @@ export const useGame = create<GameState>()(
         holes: s.holes,
         mode: s.mode,
         noPokerDeck: s.noPokerDeck,
+        useVirtualPokerDeck: s.useVirtualPokerDeck,
         musicVolume: s.musicVolume,
         musicMuted: s.musicMuted,
         currentHole: s.currentHole,
@@ -382,6 +559,14 @@ export const useGame = create<GameState>()(
         caddyCards: s.caddyCards,
         caddyAssignment: s.caddyAssignment,
         caddyTurn: s.caddyTurn,
+        pokerPhase: s.pokerPhase,
+        pokerTurn: s.pokerTurn,
+        pokerDeck: s.pokerDeck,
+        pokerDealt: s.pokerDealt,
+        pokerCaddyAssignment: s.pokerCaddyAssignment,
+        pokerHands: s.pokerHands,
+        pokerSelection: s.pokerSelection,
+        pokerMulliganOffer: s.pokerMulliganOffer,
       }),
     }
   )

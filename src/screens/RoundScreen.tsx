@@ -237,7 +237,7 @@ function MatchupPhase() {
       {/* Next Hole slides up once a winner has been picked. */}
       <SlideUpFooter visible={winner != null}>
         <PrimaryButton
-          label={isLastHole ? 'See Results' : 'Next Hole'}
+          label={isLastHole ? 'Continue' : 'Next Hole'}
           onPress={nextHole}
         />
       </SlideUpFooter>
@@ -419,7 +419,7 @@ function ScorePhase() {
       {/* Next Hole slides up shortly after every card is marked. */}
       <SlideUpFooter visible={showEnd}>
         <PrimaryButton
-          label={isLastHole ? 'See Results' : 'Next Hole'}
+          label={isLastHole ? 'Continue' : 'Next Hole'}
           onPress={nextHole}
         />
       </SlideUpFooter>
@@ -442,6 +442,8 @@ function ScorePhase() {
             from={e.from}
             to={e.to}
             message={e.message}
+            // Sit above the slide-up "Next Hole" footer (~94px tall) so they don't overlap.
+            toastBottom={116}
             onDone={() => removeEffect(e.id)}
           />
         ) : (
