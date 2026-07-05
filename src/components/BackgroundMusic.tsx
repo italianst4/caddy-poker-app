@@ -2,11 +2,14 @@ import { useEffect, useRef } from 'react';
 import { setAudioModeAsync, useAudioPlayer } from 'expo-audio';
 import { useGame, type Step } from '../store/gameStore';
 
-/** Steps during which the lobby music loops (everything before a round is underway). */
+/**
+ * Steps during which the lobby music loops (everything before a round is underway).
+ * 'howToPlay' is intentionally excluded so the music fades out while the how-to-play video
+ * plays, then resumes on return to the menu.
+ */
 const PRE_ROUND_STEPS = new Set<Step>([
   'home',
   'menu',
-  'howToPlay',
   'count',
   'names',
   'holes',
