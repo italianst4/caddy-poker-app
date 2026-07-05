@@ -26,12 +26,29 @@ import {
   evaluateHand,
   pickWinners,
   isWildCard,
+  RANK_VAL,
   type PokerCard,
+  type Suit,
   type HandResult,
 } from '../data/pokerDeck';
 import { useGame } from '../store/gameStore';
 import { playGolfCrowd } from '../sounds';
 import { CARD_RATIO, colors, radius, spacing } from '../theme';
+
+type SortMode = 'dealt' | 'rank' | 'suit';
+const SUIT_ORDER: Record<Suit, number> = { S: 0, H: 1, D: 2, C: 3 };
+
+/** Order the dealt cards for display (selection is tracked by id, so this is cosmetic). */
+function sortHand(cards: PokerCard[], mode: SortMode): PokerCard[] {
+  if (mode === 'dealt') return cards;
+  const arr = cards.slice();
+  if (mode === 'rank') {
+    arr.sort((a, b) => RANK_VAL[b.rank] - RANK_VAL[a.rank] || SUIT_ORDER[a.suit] - SUIT_ORDER[b.suit]);
+  } else {
+    arr.sort((a, b) => SUIT_ORDER[a.suit] - SUIT_ORDER[b.suit] || RANK_VAL[b.rank] - RANK_VAL[a.rank]);
+  }
+  return arr;
+}
 
 export function PokerRoundScreen() {
   const pokerPhase = useGame((s) => s.pokerPhase);
@@ -210,6 +227,7 @@ function SelectPhase() {
 
   const [caddyZoom, setCaddyZoom] = useState(false);
   const [showRanks, setShowRanks] = useState(false);
+  const [sortMode, setSortMode] = useState<SortMode>('dealt');
 
   const name = players[pokerTurn] ?? '';
   const hand = pokerHands[pokerTurn];
@@ -231,8 +249,9 @@ function SelectPhase() {
   const cardW = Math.min(availW / 3.4, 96);
   const cardH = cardW / CARD_RATIO;
 
+  const displayHand = sortHand(hand, sortMode);
   const rows: PokerCard[][] = [];
-  for (let i = 0; i < hand.length; i += 6) rows.push(hand.slice(i, i + 6));
+  for (let i = 0; i < displayHand.length; i += 6) rows.push(displayHand.slice(i, i + 6));
 
   const selectionCount = selected.length;
   const caddyW = Math.min(width * 0.16, 70);
@@ -272,6 +291,24 @@ function SelectPhase() {
         ) : null}
       </View>
 
+      <View style={styles.sortRow}>
+        <Text style={styles.sortLabel}>Sort</Text>
+        {(['rank', 'suit'] as const).map((mode) => {
+          const active = sortMode === mode;
+          return (
+            <Pressable
+              key={mode}
+              onPress={() => setSortMode(active ? 'dealt' : mode)}
+              style={({ pressed }) => [styles.sortChip, active && styles.sortChipActive, pressed && styles.pressed]}
+            >
+              <Text style={[styles.sortChipText, active && styles.sortChipTextActive]}>
+                {mode === 'rank' ? 'Rank' : 'Suit'}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
       <ScrollView contentContainerStyle={styles.handScroll} showsVerticalScrollIndicator={false}>
         {rows.map((row, r) => {
           const overlap = row.length > 1 ? Math.min(cardW * 0.62, (availW - cardW) / (row.length - 1)) : 0;
@@ -282,8 +319,8 @@ function SelectPhase() {
                 const globalIdx = r * 6 + i;
                 const isSelected = selected.includes(card.id);
                 const cardWild = isWildCard(card, effect);
-                // Raise wild/selected cards so their corner chip isn't hidden by a neighbor.
-                const z = isSelected ? 40 + i : cardWild ? 20 + i : i;
+                // Natural stacking order (each card overlaps the previous). Selecting a card
+                // only raises it vertically — it stays tucked under the cards that overlap it.
                 return (
                   <Animated.View
                     key={card.id}
@@ -292,7 +329,7 @@ function SelectPhase() {
                       position: 'absolute',
                       left: i * overlap,
                       top: isSelected ? 0 : 20,
-                      zIndex: z,
+                      zIndex: i,
                     }}
                   >
                     <PokerCardView
@@ -648,6 +685,24 @@ const styles = StyleSheet.create({
   },
   selectHeaderText: { flexShrink: 1 },
   selectHint: { color: colors.textMuted, fontSize: 15, marginTop: 2 },
+  sortRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+  },
+  sortLabel: { color: colors.textMuted, fontSize: 13, fontWeight: '800' },
+  sortChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: 999,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+  },
+  sortChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  sortChipText: { color: colors.textMuted, fontSize: 14, fontWeight: '800' },
+  sortChipTextActive: { color: colors.primaryText },
   caddyTag: { color: colors.gold, fontSize: 11, fontWeight: '800', textAlign: 'center', marginTop: 2 },
   caddyTagActive: { color: colors.primary },
   footerTopRow: {

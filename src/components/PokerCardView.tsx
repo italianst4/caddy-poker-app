@@ -57,7 +57,7 @@ export function PokerCardView({ card, width, selected, wild, onPress, style }: P
   return (
     <View style={[{ width, height }, style]}>
       {face}
-      <View style={[styles.chipCorner, { top: -chip * 0.12, right: -chip * 0.12 }]} pointerEvents="none">
+      <View style={[styles.chipCorner, { top: -chip * 0.55, right: -chip * 0.1 }]} pointerEvents="none">
         <WildChip size={chip} />
       </View>
     </View>

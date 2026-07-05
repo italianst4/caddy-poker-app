@@ -53,6 +53,13 @@ export function StackHost({ routeKey, transition, render, backKey = null, onSwip
   transitionRef.current = transition;
   const previousRef = useRef(previous);
   previousRef.current = previous;
+
+  // Instant (no-transition) route changes: sync `current` during render so we never paint the
+  // old screen for a frame. Without this, a reset-to-home briefly re-renders the outgoing
+  // screen with freshly-reset state (e.g. the poker screen flashing its "How this works" intro).
+  if (transition == null && previous == null && current !== routeKey) {
+    setCurrent(routeKey);
+  }
   const backKeyRef = useRef(backKey);
   backKeyRef.current = backKey;
   const onSwipeBackRef = useRef(onSwipeBack);
