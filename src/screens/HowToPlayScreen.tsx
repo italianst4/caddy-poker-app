@@ -8,7 +8,9 @@ const HOW_TO_PLAY = require('../../assets/caddypoker-how-to-play.mp4');
 /** Plays the how-to-play video full screen. Closes on the ✕, or auto-returns when it ends. */
 export function HowToPlayScreen() {
   const goTo = useGame((s) => s.goTo);
-  const close = () => goTo('menu', 'pop');
+  // Instant (no pop) so the screen mounts/unmounts exactly once — a slide transition would
+  // remount the player and replay the video's opening.
+  const close = () => goTo('menu');
 
   const player = useVideoPlayer(HOW_TO_PLAY, (p) => {
     p.loop = false;
@@ -17,7 +19,7 @@ export function HowToPlayScreen() {
 
   // Return to the menu when the video finishes.
   useEffect(() => {
-    const sub = player.addListener('playToEnd', () => goTo('menu', 'pop'));
+    const sub = player.addListener('playToEnd', () => goTo('menu'));
     return () => sub.remove();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [player]);
@@ -28,7 +30,7 @@ export function HowToPlayScreen() {
         player={player}
         style={StyleSheet.absoluteFill}
         contentFit="contain"
-        nativeControls={false}
+        nativeControls
         allowsFullscreen={false}
       />
       <SafeAreaView style={styles.overlay} pointerEvents="box-none">
@@ -46,7 +48,8 @@ export function HowToPlayScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#000' },
-  overlay: { flex: 1, alignItems: 'flex-end' },
+  // Close sits top-left so it clears the native AirPlay/PiP controls (top-right).
+  overlay: { flex: 1, alignItems: 'flex-start' },
   closeBtn: {
     margin: 12,
     width: 40,

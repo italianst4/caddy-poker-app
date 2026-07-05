@@ -13,6 +13,7 @@ export function ResultsScreen() {
   const challengesWon = useGame((s) => s.challengesWon);
   const noPokerDeck = useGame((s) => s.noPokerDeck);
   const useVirtualPokerDeck = useGame((s) => s.useVirtualPokerDeck);
+  const includeCaddies = useGame((s) => s.includeCaddies);
   const viewScorecard = useGame((s) => s.viewScorecard);
   const startCaddyDraw = useGame((s) => s.startCaddyDraw);
   const startPokerRound = useGame((s) => s.startPokerRound);
@@ -132,7 +133,7 @@ export function ResultsScreen() {
       scroll
       footer={
         <>
-          <PrimaryButton label="Ready to Pick Caddies" onPress={startCaddyDraw} />
+          <PrimaryButton label={includeCaddies ? 'Pick Caddies' : 'Play Poker'} onPress={startCaddyDraw} />
           <PrimaryButton
             label="No deck? Play with a virtual deck"
             variant="secondary"

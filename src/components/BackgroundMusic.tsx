@@ -2,14 +2,11 @@ import { useEffect, useRef } from 'react';
 import { setAudioModeAsync, useAudioPlayer } from 'expo-audio';
 import { useGame, type Step } from '../store/gameStore';
 
-/**
- * Steps during which the lobby music loops (everything before a round is underway).
- * 'howToPlay' is intentionally excluded so the music fades out while the how-to-play video
- * plays, then resumes on return to the menu.
- */
+/** Steps during which the lobby music loops (everything before a round is underway). */
 const PRE_ROUND_STEPS = new Set<Step>([
   'home',
   'menu',
+  'howToPlay',
   'count',
   'names',
   'holes',
@@ -32,7 +29,9 @@ export function BackgroundMusic() {
   const fadeRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const isLobby = PRE_ROUND_STEPS.has(step);
-  const target = musicMuted ? 0 : musicVolume;
+  // Mute (but don't pause) the lobby music while the how-to-play video plays, so the shared
+  // iOS audio session stays active and the video isn't interrupted.
+  const target = musicMuted || step === 'howToPlay' ? 0 : musicVolume;
 
   const clearFade = () => {
     if (fadeRef.current) {
@@ -71,10 +70,12 @@ export function BackgroundMusic() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLobby]);
 
-  // Live volume/mute updates while the lobby music is playing.
+  // Live volume/mute updates while the lobby music is playing. Also re-play when unmuting, to
+  // recover if iOS interrupted the (muted) music while the how-to-play video had the session.
   useEffect(() => {
     if (isLobby && !fadeRef.current) {
       player.volume = target;
+      if (target > 0) player.play();
     }
   }, [target, isLobby, player]);
 

@@ -51,6 +51,7 @@ type GameState = {
   noPokerDeck: boolean; // play challenges only — no poker hand / caddy finale
   useVirtualPokerDeck: boolean; // play the poker finale in-app with a virtual deck
   includeMatchups: boolean; // include head-to-head matchup cards in the draw pool
+  includeCaddies: boolean; // include the caddy-card draw (bonus cards) in the poker finale
   showLiveActivity: boolean; // show each golfer's challenge in an iOS Live Activity during a round
   musicVolume: number; // background-music volume, 0..1
   musicMuted: boolean; // background-music mute toggle
@@ -93,6 +94,7 @@ type GameState = {
   setNoPokerDeck: (v: boolean) => void;
   setUseVirtualPokerDeck: (v: boolean) => void;
   setIncludeMatchups: (v: boolean) => void;
+  setIncludeCaddies: (v: boolean) => void;
   setShowLiveActivity: (v: boolean) => void;
   setMusicVolume: (v: number) => void;
   setMusicMuted: (m: boolean) => void;
@@ -191,6 +193,7 @@ export const useGame = create<GameState>()(
       noPokerDeck: false,
       useVirtualPokerDeck: false,
       includeMatchups: true,
+      includeCaddies: true,
       showLiveActivity: true,
       musicVolume: 0.6,
       musicMuted: false,
@@ -245,6 +248,7 @@ export const useGame = create<GameState>()(
       setUseVirtualPokerDeck: (v) =>
         set(v ? { useVirtualPokerDeck: true, noPokerDeck: false } : { useVirtualPokerDeck: false }),
       setIncludeMatchups: (includeMatchups) => set({ includeMatchups }),
+      setIncludeCaddies: (includeCaddies) => set({ includeCaddies }),
       setShowLiveActivity: (showLiveActivity) => set({ showLiveActivity }),
       setMusicVolume: (v) => set({ musicVolume: Math.max(0, Math.min(1, v)) }),
       setMusicMuted: (musicMuted) => set({ musicMuted }),
@@ -276,15 +280,20 @@ export const useGame = create<GameState>()(
           return { assignment: { ...s.assignment, [s.currentHole]: holeAssign } };
         }),
 
-      // After the round: draw 9 random caddies and let each golfer pick one.
+      // After the round: draw 9 random caddies and let each golfer pick one. When caddy cards
+      // are turned off, skip the draw and go straight to the final tally.
       startCaddyDraw: () =>
-        set({
-          caddyCards: drawCaddies(9),
-          caddyAssignment: {},
-          caddyTurn: 0,
-          step: 'caddy',
-          transition: 'push',
-        }),
+        set((s) =>
+          s.includeCaddies
+            ? {
+                caddyCards: drawCaddies(9),
+                caddyAssignment: {},
+                caddyTurn: 0,
+                step: 'caddy' as Step,
+                transition: 'push' as const,
+              }
+            : { caddyCards: [], caddyAssignment: {}, step: 'caddyResults' as Step, transition: 'push' as const }
+        ),
 
       pickCaddy: (position) =>
         set((s) => ({ caddyAssignment: { ...s.caddyAssignment, [s.caddyTurn]: position } })),
@@ -321,7 +330,8 @@ export const useGame = create<GameState>()(
       beginPokerReady: () =>
         set((s) => (s.pokerTurn < 0 ? { pokerPhase: 'allIn' as PokerPhase } : { pokerPhase: 'ready' as PokerPhase })),
 
-      pokerReady: () => set({ pokerPhase: 'caddy' }),
+      // "Yes, ready" → pick a caddy, or straight to the deal when caddy cards are off.
+      pokerReady: () => set((s) => ({ pokerPhase: (s.includeCaddies ? 'caddy' : 'deal') as PokerPhase })),
 
       pickPokerCaddy: (position) =>
         set((s) => ({
@@ -555,6 +565,7 @@ export const useGame = create<GameState>()(
         noPokerDeck: s.noPokerDeck,
         useVirtualPokerDeck: s.useVirtualPokerDeck,
         includeMatchups: s.includeMatchups,
+        includeCaddies: s.includeCaddies,
         showLiveActivity: s.showLiveActivity,
         musicVolume: s.musicVolume,
         musicMuted: s.musicMuted,

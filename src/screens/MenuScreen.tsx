@@ -19,6 +19,8 @@ export function MenuScreen() {
   const setMode = useGame((s) => s.setMode);
   const includeMatchups = useGame((s) => s.includeMatchups);
   const setIncludeMatchups = useGame((s) => s.setIncludeMatchups);
+  const includeCaddies = useGame((s) => s.includeCaddies);
+  const setIncludeCaddies = useGame((s) => s.setIncludeCaddies);
   const noPokerDeck = useGame((s) => s.noPokerDeck);
   const setNoPokerDeck = useGame((s) => s.setNoPokerDeck);
   const useVirtualPokerDeck = useGame((s) => s.useVirtualPokerDeck);
@@ -31,7 +33,7 @@ export function MenuScreen() {
 
   const onRestore = () => {
     // TODO: hook up to Apple Payments; on success, show the restored purchase details.
-    Alert.alert('Restore Purchase', 'TODO — this will be hooked up to Apple Payments.');
+    Alert.alert('Coming Soon', 'Restore Purchase is coming soon.', [{ text: 'OK' }]);
   };
 
   return (
@@ -39,7 +41,7 @@ export function MenuScreen() {
       {/* Opaque backdrop covering the Home screen underneath. The Home→Menu step swap is
           instant (no sliding container), so the background stays put; only the content below
           slides in. */}
-      <LandscapeBackground />
+      <LandscapeBackground hideClouds />
       <Animated.View style={styles.flex} entering={SlideInRight.duration(320)}>
         <SafeAreaView style={styles.safe}>
           <ScreenHeader title="Menu" onBack={() => goTo('home')} />
@@ -74,7 +76,20 @@ export function MenuScreen() {
 
             <View style={styles.settingRow}>
               <View style={styles.settingText}>
-                <Text style={styles.settingLabel}>Play Without Poker Deck</Text>
+                <Text style={styles.settingLabel}>Include Caddy Cards</Text>
+                <Text style={styles.settingNote}>Draw caddy cards for the poker finale</Text>
+              </View>
+              <Switch
+                value={includeCaddies}
+                onValueChange={setIncludeCaddies}
+                trackColor={{ true: colors.primary, false: 'rgba(255,255,255,0.25)' }}
+                thumbColor={colors.white}
+              />
+            </View>
+
+            <View style={styles.settingRow}>
+              <View style={styles.settingText}>
+                <Text style={styles.settingLabel}>Challenges Only</Text>
                 <Text style={styles.settingNote}>Play challenges only, no poker hand finale</Text>
               </View>
               <Switch
@@ -116,7 +131,9 @@ export function MenuScreen() {
           <Pressable
             onPress={() => {
               playGolfHit();
-              goTo('howToPlay', 'push');
+              // Instant (no push) so the video screen mounts exactly once — a slide transition
+              // remounts it and restarts the video, doubling the opening audio.
+              goTo('howToPlay');
             }}
             style={({ pressed }) => [styles.restoreBtn, styles.firstButton, pressed && styles.pressed]}
           >

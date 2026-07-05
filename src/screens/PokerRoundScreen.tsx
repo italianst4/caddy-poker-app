@@ -60,9 +60,12 @@ export function PokerRoundScreen() {
 /* ------------------------------------------------------------------ */
 function IntroPhase() {
   const beginPokerReady = useGame((s) => s.beginPokerReady);
+  const includeCaddies = useGame((s) => s.includeCaddies);
   const steps = [
     'You’ll pass the phone to the player as instructed.',
-    'The player will pick a Caddy Card. Caddy Cards help you improve your poker hand.',
+    ...(includeCaddies
+      ? ['The player will pick a Caddy Card. Caddy Cards help you improve your poker hand.']
+      : []),
     'The player will be dealt the number of poker cards they earned.',
     'The player will lock in their poker hand.',
   ];
@@ -80,7 +83,7 @@ function IntroPhase() {
           <Text style={styles.stepText}>{text}</Text>
         </View>
       ))}
-      <Text style={styles.bodyMuted}>
+      <Text style={styles.finale}>
         Once everyone has locked in their hand, we'll reveal the winner! 🃏
       </Text>
     </ScreenLayout>
@@ -583,6 +586,14 @@ const styles = StyleSheet.create({
   },
   stepNumText: { color: colors.primaryText, fontSize: 16, fontWeight: '900' },
   stepText: { flex: 1, color: colors.text, fontSize: 17, fontWeight: '600', lineHeight: 24, paddingTop: 3 },
+  finale: {
+    color: colors.gold,
+    fontSize: 24,
+    fontWeight: '800',
+    lineHeight: 32,
+    textAlign: 'center',
+    marginTop: spacing.xl * 2,
+  },
 
   passNote: { color: colors.textMuted, fontSize: 16, fontWeight: '600' },
   readyName: { color: colors.gold, fontSize: 34, fontWeight: '900', textAlign: 'center', marginTop: spacing.xs },

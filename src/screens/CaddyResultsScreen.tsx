@@ -14,6 +14,7 @@ export function CaddyResultsScreen() {
   const caddyCards = useGame((s) => s.caddyCards);
   const caddyAssignment = useGame((s) => s.caddyAssignment);
   const pokerCardCount = useGame((s) => s.pokerCardCount);
+  const includeCaddies = useGame((s) => s.includeCaddies);
   const reset = useGame((s) => s.reset);
 
   const [viewing, setViewing] = useState<number | null>(null);
@@ -35,8 +36,8 @@ export function CaddyResultsScreen() {
   return (
     <View style={styles.flex}>
       <ScreenLayout
-        title="Caddies drawn"
-        subtitle="Use these to improve your poker hand."
+        title={includeCaddies ? 'Caddies drawn' : 'Poker cards earned'}
+        subtitle={includeCaddies ? 'Use these to improve your poker hand.' : 'Deal these out and play poker!'}
         scroll
         footer={<PrimaryButton label="Game Over" onPress={onGameOver} />}
       >
@@ -45,6 +46,18 @@ export function CaddyResultsScreen() {
             const pos = caddyAssignment[i];
             const card = pos != null ? caddyById(caddyCards[pos]) : undefined;
             const count = pokerCardCount(i);
+            // No caddies: just show each golfer's earned poker-card count.
+            if (!includeCaddies) {
+              return (
+                <View key={i} style={[styles.cell, styles.countCell, { width: cardWidth }]}>
+                  <Text style={styles.name} numberOfLines={1}>
+                    {name}
+                  </Text>
+                  <Text style={styles.bigCount}>{count}</Text>
+                  <Text style={styles.countLabel}>{count === 1 ? 'card' : 'cards'}</Text>
+                </View>
+              );
+            }
             return (
               <View key={i} style={[styles.cell, { width: cardWidth }]}>
                 <Text style={styles.name} numberOfLines={1}>
@@ -87,6 +100,16 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   cell: { alignItems: 'center', gap: spacing.xs },
+  countCell: {
+    marginBottom: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: colors.gold,
+    backgroundColor: 'rgba(212,175,55,0.10)',
+  },
+  bigCount: { color: colors.gold, fontSize: 48, fontWeight: '900' },
+  countLabel: { color: colors.textMuted, fontSize: 14, fontWeight: '700' },
   name: { color: colors.text, fontSize: 18, fontWeight: '800', maxWidth: '100%' },
   fill: { width: '100%', height: '100%' },
   badge: {

@@ -44,7 +44,8 @@
           "appleTeamId": "B26CL9L2G8"
         }
       ],
-      "expo-video"
+      "expo-video",
+      "./plugins/withScriptSandboxDisabled"
     ]
   }
 }
