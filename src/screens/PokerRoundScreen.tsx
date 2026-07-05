@@ -397,7 +397,7 @@ function AllInPhase() {
 /* Reveal — winner + hand, others below                               */
 /* ------------------------------------------------------------------ */
 function RevealPhase() {
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const players = useGame((s) => s.players);
   const avatars = useGame((s) => s.avatars);
   const caddyCards = useGame((s) => s.caddyCards);
@@ -408,6 +408,7 @@ function RevealPhase() {
   const reset = useGame((s) => s.reset);
 
   const [showConfetti, setShowConfetti] = useState(true);
+  const [zoomCaddyId, setZoomCaddyId] = useState<string | null>(null);
 
   // Crowd cheer on the winner reveal.
   useEffect(() => {
@@ -446,18 +447,25 @@ function RevealPhase() {
   const winnerCardW = Math.min(width / 6.5, 70);
   const winCellH = Math.min(width * 0.26, 130);
   const loseCellH = Math.min(width * 0.14, 74);
+  const zoomW = Math.min(width * 0.78, height * 0.6 * CARD_RATIO);
+  const zoomCaddy = zoomCaddyId ? caddyById(zoomCaddyId) : undefined;
 
   return (
     <View style={styles.flex}>
       <ScreenLayout
-        title={winners.size > 1 ? "It's a tie!" : 'Winner!'}
         scroll
         footer={<PrimaryButton label="Game Over" onPress={onGameOver} />}
       >
+        <Text style={styles.revealTitle}>{winners.size > 1 ? "It's a tie!" : 'Winner!'}</Text>
         {[...winners].map((idx) => {
           const g = GOLFERS[avatars[idx] ?? idx] ?? GOLFERS[0];
           const cards = selectedCardsFor(idx);
           const effect = caddyEffect(caddyCards[pokerCaddyAssignment[idx]]);
+          // The caddy card is "in use" if it made a card wild or improved the hand's rank.
+          const caddyUsed =
+            cards.some((c) => isWildCard(c, effect)) ||
+            evaluateHand(cards, { kind: 'none' }).cat < results[idx].cat;
+          const caddyCard = caddyById(caddyCards[pokerCaddyAssignment[idx]]);
           return (
             <View key={idx} style={styles.winnerBlock}>
               <Text style={styles.crown}>👑</Text>
@@ -478,6 +486,15 @@ function RevealPhase() {
                     style={{ marginHorizontal: 2 }}
                   />
                 ))}
+                {/* The winner's caddy card sits inline with the played cards; tap to zoom. */}
+                {caddyUsed && caddyCard ? (
+                  <Pressable
+                    onPress={() => setZoomCaddyId(caddyCard.id)}
+                    style={({ pressed }) => [styles.winnerCaddy, pressed && styles.pressed]}
+                  >
+                    <CardArt card={caddyCard} style={{ width: winnerCardW, borderRadius: 4 }} />
+                  </Pressable>
+                ) : null}
               </View>
             </View>
           );
@@ -516,6 +533,17 @@ function RevealPhase() {
           durationMs={10000}
           onDone={() => setShowConfetti(false)}
         />
+      ) : null}
+
+      {zoomCaddy ? (
+        <Pressable style={styles.zoomOverlay} onPress={() => setZoomCaddyId(null)}>
+          <Animated.View entering={ZoomIn.duration(240)} style={{ width: zoomW }}>
+            <CardArt card={zoomCaddy} style={{ width: zoomW }} />
+          </Animated.View>
+          <View style={styles.zoomClose}>
+            <PrimaryButton label="Close" variant="secondary" onPress={() => setZoomCaddyId(null)} />
+          </View>
+        </Pressable>
       ) : null}
     </View>
   );
@@ -668,9 +696,20 @@ const styles = StyleSheet.create({
   offerSub: { color: colors.text, fontSize: 17, marginTop: spacing.xs, marginBottom: spacing.xl },
   offerRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
 
+  revealTitle: {
+    color: colors.text,
+    fontSize: 40,
+    fontWeight: '900',
+    textAlign: 'center',
+    letterSpacing: 0.3,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+  },
   winnerBlock: { alignItems: 'center', marginTop: spacing.md },
   crown: { fontSize: 30 },
   winnerName: { color: colors.gold, fontSize: 26, fontWeight: '900', marginTop: spacing.xs },
+  winnerCaddy: { marginHorizontal: 2 },
+  pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
   handName: { color: colors.text, fontSize: 20, fontWeight: '800', marginBottom: spacing.md },
   handRow: { flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', gap: 2 },
   othersLabel: {

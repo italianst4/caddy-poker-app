@@ -10,18 +10,20 @@ import {
 import Animated, {
   Easing,
   interpolate,
+  runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
+  withSequence,
   withTiming,
 } from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
 import { CardArt } from './CardArt';
 import { CardBack } from './CardBack';
 import { SunRays } from './SunRays';
 import { CARD_RATIO, colors, radius, spacing } from '../theme';
 import { isMatchup, type Card } from '../data/cards';
 import { playCardFlip } from '../sounds';
+import { hapticFlipStart, hapticFlipEnd } from '../haptics';
 
 type Props = {
   card: Card;
@@ -46,16 +48,24 @@ export function FlipCard({ card, playerName, onDismiss, onRedraw, acceptLabel = 
   const progress = useSharedValue(0);
 
   useEffect(() => {
-    // Play the flip sound + haptic as the flip animation begins (it starts after a 300ms delay).
-    const flipId = setTimeout(() => {
-      playCardFlip();
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    }, 100);
+    const soundId = setTimeout(playCardFlip, 100);
+    // Haptics are driven by the flip animation itself (not the mount): a soft "lift" the
+    // instant the rotation starts, then a rigid "snap" when it lands face-up.
     progress.value = withDelay(
       300,
-      withTiming(1, { duration: 750, easing: Easing.out(Easing.cubic) })
+      withSequence(
+        // Zero-duration step: its completion fires exactly when the flip begins.
+        withTiming(0, { duration: 0 }, (finished) => {
+          'worklet';
+          if (finished) runOnJS(hapticFlipStart)();
+        }),
+        withTiming(1, { duration: 750, easing: Easing.out(Easing.cubic) }, (finished) => {
+          'worklet';
+          if (finished) runOnJS(hapticFlipEnd)();
+        })
+      )
     );
-    return () => clearTimeout(flipId);
+    return () => clearTimeout(soundId);
   }, [progress]);
 
   const frontStyle = useAnimatedStyle(() => ({

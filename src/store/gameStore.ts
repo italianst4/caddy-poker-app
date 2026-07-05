@@ -50,6 +50,8 @@ type GameState = {
   mode: GameMode;
   noPokerDeck: boolean; // play challenges only — no poker hand / caddy finale
   useVirtualPokerDeck: boolean; // play the poker finale in-app with a virtual deck
+  includeMatchups: boolean; // include head-to-head matchup cards in the draw pool
+  showLiveActivity: boolean; // show each golfer's challenge in an iOS Live Activity during a round
   musicVolume: number; // background-music volume, 0..1
   musicMuted: boolean; // background-music mute toggle
 
@@ -90,6 +92,8 @@ type GameState = {
   setMode: (m: GameMode) => void;
   setNoPokerDeck: (v: boolean) => void;
   setUseVirtualPokerDeck: (v: boolean) => void;
+  setIncludeMatchups: (v: boolean) => void;
+  setShowLiveActivity: (v: boolean) => void;
   setMusicVolume: (v: number) => void;
   setMusicMuted: (m: boolean) => void;
   toggleMusicMuted: () => void;
@@ -134,8 +138,8 @@ const DEFAULT_NAMES = ['Player 1', 'Player 2', 'Player 3', 'Player 4'];
 /** Always show 4 cards per hole, regardless of player count. */
 const CARDS_PER_HOLE = 4;
 
-function drawCardsFor(state: Pick<GameState, 'mode'>): string[] {
-  const pool = buildDrawPool(state.mode);
+function drawCardsFor(state: Pick<GameState, 'mode' | 'includeMatchups'>): string[] {
+  const pool = buildDrawPool(state.mode, state.includeMatchups);
   return drawDistinct(pool, CARDS_PER_HOLE).map((c) => c.id);
 }
 
@@ -186,6 +190,8 @@ export const useGame = create<GameState>()(
       mode: 'amateur',
       noPokerDeck: false,
       useVirtualPokerDeck: false,
+      includeMatchups: true,
+      showLiveActivity: true,
       musicVolume: 0.6,
       musicMuted: false,
 
@@ -238,6 +244,8 @@ export const useGame = create<GameState>()(
       setNoPokerDeck: (v) => set(v ? { noPokerDeck: true, useVirtualPokerDeck: false } : { noPokerDeck: false }),
       setUseVirtualPokerDeck: (v) =>
         set(v ? { useVirtualPokerDeck: true, noPokerDeck: false } : { useVirtualPokerDeck: false }),
+      setIncludeMatchups: (includeMatchups) => set({ includeMatchups }),
+      setShowLiveActivity: (showLiveActivity) => set({ showLiveActivity }),
       setMusicVolume: (v) => set({ musicVolume: Math.max(0, Math.min(1, v)) }),
       setMusicMuted: (musicMuted) => set({ musicMuted }),
       toggleMusicMuted: () => set((s) => ({ musicMuted: !s.musicMuted })),
@@ -245,7 +253,7 @@ export const useGame = create<GameState>()(
       startRound: () =>
         set((s) => {
           const players = s.players.map((p, i) => (p.trim() === '' ? DEFAULT_NAMES[i] : p));
-          const firstHole = drawCardsFor({ mode: s.mode });
+          const firstHole = drawCardsFor({ mode: s.mode, includeMatchups: s.includeMatchups });
           return {
             players,
             step: 'round',
@@ -391,7 +399,7 @@ export const useGame = create<GameState>()(
       // Replace the card at `position` with a fresh random draw (different from the current).
       redrawCard: (position) =>
         set((s) => {
-          const pool = buildDrawPool(s.mode);
+          const pool = buildDrawPool(s.mode, s.includeMatchups);
           const currentId = s.holeCards[s.currentHole]?.[position];
           const candidates = pool.filter((c) => c.id !== currentId);
           const nextId = drawDistinct(candidates, 1)[0]?.id ?? currentId;
@@ -454,7 +462,7 @@ export const useGame = create<GameState>()(
         set((s) => {
           if (s.currentHole < s.holes) {
             const next = s.currentHole + 1;
-            const cards = drawCardsFor({ mode: s.mode });
+            const cards = drawCardsFor({ mode: s.mode, includeMatchups: s.includeMatchups });
             return {
               currentHole: next,
               phase: 'pick' as Phase,
@@ -535,7 +543,7 @@ export const useGame = create<GameState>()(
       name: 'caddy-game',
       // Bump when the persisted round shape changes — old saved rounds are then discarded
       // so the app boots fresh at the home screen instead of resuming a stale round.
-      version: 3,
+      version: 4,
       storage: createJSONStorage(() => AsyncStorage),
       // Persist only data (not action functions) so a backgrounded round resumes.
       partialize: (s) => ({
@@ -546,6 +554,8 @@ export const useGame = create<GameState>()(
         mode: s.mode,
         noPokerDeck: s.noPokerDeck,
         useVirtualPokerDeck: s.useVirtualPokerDeck,
+        includeMatchups: s.includeMatchups,
+        showLiveActivity: s.showLiveActivity,
         musicVolume: s.musicVolume,
         musicMuted: s.musicMuted,
         currentHole: s.currentHole,

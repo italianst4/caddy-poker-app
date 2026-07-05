@@ -20,6 +20,7 @@ export function OverviewScreen() {
   const avatars = useGame((s) => s.avatars);
   const holes = useGame((s) => s.holes);
   const mode = useGame((s) => s.mode);
+  const includeMatchups = useGame((s) => s.includeMatchups);
   const startRound = useGame((s) => s.startRound);
   const goTo = useGame((s) => s.goTo);
 
@@ -66,6 +67,11 @@ export function OverviewScreen() {
             {mode === 'pro' ? (
               <View style={[styles.chip, styles.teesChip]}>
                 <Text style={styles.teesChipText}>Black Tees</Text>
+              </View>
+            ) : null}
+            {includeMatchups ? (
+              <View style={[styles.chip, styles.matchupChip]}>
+                <Text style={styles.matchupChipText}>⚔️ Matchup!</Text>
               </View>
             ) : null}
           </View>
@@ -134,6 +140,11 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.5)',
   },
   teesChipText: { color: colors.white, fontSize: 16, fontWeight: '800', letterSpacing: 0.3 },
+  matchupChip: {
+    backgroundColor: '#D9822B',
+    borderColor: 'rgba(255,255,255,0.6)',
+  },
+  matchupChipText: { color: colors.white, fontSize: 16, fontWeight: '800', letterSpacing: 0.3 },
   footer: {
     paddingBottom: spacing.lg,
     alignItems: 'center',

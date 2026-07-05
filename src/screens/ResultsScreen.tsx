@@ -20,7 +20,8 @@ export function ResultsScreen() {
 
   const gap = spacing.lg;
   const columnWidth = (width - spacing.lg * 2 - gap) / 2;
-  const cellH = Math.min(columnWidth / MAX_GOLFER_RATIO, height * 0.2);
+  // Slightly smaller so a 2×2 grid of golfers fits without scrolling.
+  const cellH = Math.min(columnWidth / MAX_GOLFER_RATIO, height * 0.16);
 
   const onGameOver = () => {
     Alert.alert('Game over?', 'Return to the main menu?', [
@@ -132,6 +133,11 @@ export function ResultsScreen() {
       footer={
         <>
           <PrimaryButton label="Ready to Pick Caddies" onPress={startCaddyDraw} />
+          <PrimaryButton
+            label="No deck? Play with a virtual deck"
+            variant="secondary"
+            onPress={startPokerRound}
+          />
           <Pressable
             onPress={() => viewScorecard('results')}
             style={({ pressed }) => [styles.textBtn, pressed && styles.textBtnPressed]}
@@ -176,16 +182,16 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '700',
     textAlign: 'center',
-    marginTop: spacing.xl,
-    marginBottom: spacing.lg,
-    lineHeight: 30,
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
+    lineHeight: 28,
   },
   golfers: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
     alignSelf: 'center',
-    marginTop: spacing.sm,
+    marginTop: 0,
   },
   golfer: { alignItems: 'center', gap: spacing.xs, marginBottom: spacing.sm },
   championCell: {

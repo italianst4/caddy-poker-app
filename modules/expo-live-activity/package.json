@@ -1,0 +1,7 @@
+{
+  "name": "expo-live-activity",
+  "version": "1.0.0",
+  "description": "Local module: control the golfer-challenge Live Activity",
+  "main": "index.ts",
+  "private": true
+}

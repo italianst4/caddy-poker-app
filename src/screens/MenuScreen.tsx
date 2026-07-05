@@ -5,9 +5,9 @@ import {
   StyleSheet,
   Switch,
   Text,
-  useWindowDimensions,
   View,
 } from 'react-native';
+import Animated, { SlideInRight } from 'react-native-reanimated';
 import { LandscapeBackground } from '../components/LandscapeBackground';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useGame } from '../store/gameStore';
@@ -17,12 +17,15 @@ import { colors, radius, spacing } from '../theme';
 export function MenuScreen() {
   const mode = useGame((s) => s.mode);
   const setMode = useGame((s) => s.setMode);
+  const includeMatchups = useGame((s) => s.includeMatchups);
+  const setIncludeMatchups = useGame((s) => s.setIncludeMatchups);
   const noPokerDeck = useGame((s) => s.noPokerDeck);
   const setNoPokerDeck = useGame((s) => s.setNoPokerDeck);
   const useVirtualPokerDeck = useGame((s) => s.useVirtualPokerDeck);
   const setUseVirtualPokerDeck = useGame((s) => s.setUseVirtualPokerDeck);
+  const showLiveActivity = useGame((s) => s.showLiveActivity);
+  const setShowLiveActivity = useGame((s) => s.setShowLiveActivity);
   const goTo = useGame((s) => s.goTo);
-  const { height } = useWindowDimensions();
 
   const includeBlackTees = mode === 'pro';
 
@@ -33,49 +36,81 @@ export function MenuScreen() {
 
   return (
     <View style={styles.root}>
-      <LandscapeBackground cloudOffset={height * 0.28} />
-      <SafeAreaView style={styles.safe}>
-        <ScreenHeader title="Menu" onBack={() => goTo('home', 'pop')} />
+      {/* Opaque backdrop covering the Home screen underneath. The Home→Menu step swap is
+          instant (no sliding container), so the background stays put; only the content below
+          slides in. */}
+      <LandscapeBackground />
+      <Animated.View style={styles.flex} entering={SlideInRight.duration(320)}>
+        <SafeAreaView style={styles.safe}>
+          <ScreenHeader title="Menu" onBack={() => goTo('home')} />
 
         <View style={styles.body}>
-          <View style={styles.settingRow}>
-            <View style={styles.settingText}>
-              <Text style={styles.settingLabel}>Include Black Tee Cards</Text>
-              <Text style={styles.settingNote}>Add hard challenges to the deck</Text>
+          <View style={styles.toggles}>
+            <View style={styles.settingRow}>
+              <View style={styles.settingText}>
+                <Text style={styles.settingLabel}>Include Black Tee Cards</Text>
+                <Text style={styles.settingNote}>Add hard challenges to the deck</Text>
+              </View>
+              <Switch
+                value={includeBlackTees}
+                onValueChange={(v) => setMode(v ? 'pro' : 'amateur')}
+                trackColor={{ true: colors.primary, false: 'rgba(255,255,255,0.25)' }}
+                thumbColor={colors.white}
+              />
             </View>
-            <Switch
-              value={includeBlackTees}
-              onValueChange={(v) => setMode(v ? 'pro' : 'amateur')}
-              trackColor={{ true: colors.primary, false: 'rgba(255,255,255,0.25)' }}
-              thumbColor={colors.white}
-            />
-          </View>
 
-          <View style={styles.settingRow}>
-            <View style={styles.settingText}>
-              <Text style={styles.settingLabel}>Play Without Poker Deck</Text>
-              <Text style={styles.settingNote}>Play challenges only, no poker hand finale</Text>
+            <View style={styles.settingRow}>
+              <View style={styles.settingText}>
+                <Text style={styles.settingLabel}>Include Matchup Cards</Text>
+                <Text style={styles.settingNote}>Add head-to-head golfer challenges</Text>
+              </View>
+              <Switch
+                value={includeMatchups}
+                onValueChange={setIncludeMatchups}
+                trackColor={{ true: colors.primary, false: 'rgba(255,255,255,0.25)' }}
+                thumbColor={colors.white}
+              />
             </View>
-            <Switch
-              value={noPokerDeck}
-              onValueChange={setNoPokerDeck}
-              trackColor={{ true: colors.primary, false: 'rgba(255,255,255,0.25)' }}
-              thumbColor={colors.white}
-            />
-          </View>
 
-          <View style={[styles.settingRow, styles.lastSettingRow, noPokerDeck && styles.settingDisabled]}>
-            <View style={styles.settingText}>
-              <Text style={styles.settingLabel}>Use Virtual Poker Deck</Text>
-              <Text style={styles.settingNote}>Play the poker finale in-app with a virtual deck</Text>
+            <View style={styles.settingRow}>
+              <View style={styles.settingText}>
+                <Text style={styles.settingLabel}>Play Without Poker Deck</Text>
+                <Text style={styles.settingNote}>Play challenges only, no poker hand finale</Text>
+              </View>
+              <Switch
+                value={noPokerDeck}
+                onValueChange={setNoPokerDeck}
+                trackColor={{ true: colors.primary, false: 'rgba(255,255,255,0.25)' }}
+                thumbColor={colors.white}
+              />
             </View>
-            <Switch
-              value={useVirtualPokerDeck}
-              onValueChange={setUseVirtualPokerDeck}
-              disabled={noPokerDeck}
-              trackColor={{ true: colors.primary, false: 'rgba(255,255,255,0.25)' }}
-              thumbColor={colors.white}
-            />
+
+            <View style={[styles.settingRow, noPokerDeck && styles.settingDisabled]}>
+              <View style={styles.settingText}>
+                <Text style={styles.settingLabel}>Use Virtual Poker Deck</Text>
+                <Text style={styles.settingNote}>Play poker with a virtual deck</Text>
+              </View>
+              <Switch
+                value={useVirtualPokerDeck}
+                onValueChange={setUseVirtualPokerDeck}
+                disabled={noPokerDeck}
+                trackColor={{ true: colors.primary, false: 'rgba(255,255,255,0.25)' }}
+                thumbColor={colors.white}
+              />
+            </View>
+
+            <View style={styles.settingRow}>
+              <View style={styles.settingText}>
+                <Text style={styles.settingLabel}>Show Live Activity</Text>
+                <Text style={styles.settingNote}>Show challenges on your Lock Screen</Text>
+              </View>
+              <Switch
+                value={showLiveActivity}
+                onValueChange={setShowLiveActivity}
+                trackColor={{ true: colors.primary, false: 'rgba(255,255,255,0.25)' }}
+                thumbColor={colors.white}
+              />
+            </View>
           </View>
 
           <Pressable
@@ -83,7 +118,7 @@ export function MenuScreen() {
               playGolfHit();
               goTo('howToPlay', 'push');
             }}
-            style={({ pressed }) => [styles.restoreBtn, pressed && styles.pressed]}
+            style={({ pressed }) => [styles.restoreBtn, styles.firstButton, pressed && styles.pressed]}
           >
             <Text style={styles.restoreText}>How To Play</Text>
           </Pressable>
@@ -97,24 +132,27 @@ export function MenuScreen() {
         </View>
 
         <Text style={styles.copyright}>© 2026 - Tangent Thinking LLC</Text>
-      </SafeAreaView>
+        </SafeAreaView>
+      </Animated.View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
+  flex: { flex: 1 },
   safe: { flex: 1, paddingHorizontal: spacing.lg },
   body: { flex: 1, gap: spacing.lg, paddingTop: spacing.lg },
+  // Toggles grouped with one consistent, tight gap between each row.
+  toggles: { gap: spacing.sm },
   settingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.md,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.xs,
     marginHorizontal: spacing.lg,
   },
-  lastSettingRow: { marginBottom: spacing.xl * 2 },
   settingDisabled: { opacity: 0.4 },
   settingText: { flexShrink: 1, gap: 2 },
   settingLabel: { color: colors.text, fontSize: 17, fontWeight: '800' },
@@ -128,6 +166,8 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.lg,
     alignItems: 'center',
   },
+  // Extra breathing room between the toggles and the first button.
+  firstButton: { marginTop: spacing.md * 2 },
   restoreText: { color: colors.gold, fontSize: 17, fontWeight: '800' },
   pressed: { opacity: 0.7 },
   copyright: {

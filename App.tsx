@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useGame, type Step } from './src/store/gameStore';
 import { StackHost } from './src/components/StackHost';
 import { BackgroundMusic } from './src/components/BackgroundMusic';
+import { LiveActivityController } from './src/components/LiveActivityController';
 import { colors } from './src/theme';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { MenuScreen } from './src/screens/MenuScreen';
@@ -46,6 +47,7 @@ export default function App() {
     <View style={styles.root}>
       <StatusBar style="light" />
       <BackgroundMusic />
+      <LiveActivityController />
       <StackHost
         routeKey={step}
         transition={transition}

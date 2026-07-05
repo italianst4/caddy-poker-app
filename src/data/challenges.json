@@ -1,0 +1,22 @@
+{
+  "w-bogey-train":       { "challenge": "Bogey or better",                        "category": "No-Disaster",       "tee": "White" },
+  "w-cap-the-damage":    { "challenge": "No double bogey or better",              "category": "No-Disaster",       "tee": "White" },
+  "w-find-it":           { "challenge": "No lost balls",                          "category": "No-Disaster",       "tee": "White" },
+  "w-greenlight":        { "challenge": "Green in regulation",                    "category": "Short Grass",       "tee": "White" },
+  "w-lag-it-close":      { "challenge": "Two-putt or better",                     "category": "No-Disaster",       "tee": "White" },
+  "w-make-par":          { "challenge": "Par or better",                          "category": "Around the Greens", "tee": "White" },
+  "w-no-snowman":        { "challenge": "Score less than 8",                      "category": "No-Disaster",       "tee": "White" },
+  "w-no-three-jacks":    { "challenge": "No 3-putts",                             "category": "No-Disaster",       "tee": "White" },
+  "w-not-the-goat":      { "challenge": "Don't take the highest score in the group", "category": "Vibes",          "tee": "White" },
+  "w-one-and-done":      { "challenge": "One-putt the hole",                      "category": "Around the Greens", "tee": "White" },
+  "w-skip-the-beach":    { "challenge": "Stay out of the sand",                   "category": "No-Disaster",       "tee": "White" },
+  "w-split-the-fairway": { "challenge": "Hit the fairway off the tee",            "category": "Short Grass",       "tee": "White" },
+  "w-stay-dry":          { "challenge": "No water on this hole",                  "category": "No-Disaster",       "tee": "White" },
+  "w-tree-free":         { "challenge": "Stay out of the trees",                  "category": "No-Disaster",       "tee": "White" },
+  "b-birdie-hunter":     { "challenge": "Birdie or better",                       "category": "Black Tier",        "tee": "Black" },
+  "b-drain-the-bomb":    { "challenge": "Make a putt of 20+ feet",               "category": "Black Tier",        "tee": "Black" },
+  "b-go-for-it":         { "challenge": "Reach a par 5 in two",                   "category": "Black Tier",        "tee": "Black" },
+  "b-nuke-it":           { "challenge": "250+ yard drive in the fairway",         "category": "Black Tier",        "tee": "Black" },
+  "m-closest-to-the-pin":{ "challenge": "Closest to pin in regulation",           "category": "Matchup",           "tee": "Matchup" },
+  "m-long-ball":         { "challenge": "Longest drive in the fairway",           "category": "Matchup",           "tee": "Matchup" }
+}

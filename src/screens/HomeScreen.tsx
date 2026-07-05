@@ -95,7 +95,7 @@ export function HomeScreen() {
       <SafeAreaView style={styles.safe}>
         <View style={styles.header}>
           <Pressable
-            onPress={() => goTo('menu', 'push')}
+            onPress={() => goTo('menu')}
             hitSlop={10}
             style={({ pressed }) => [styles.menuBtn, pressed && styles.pressed]}
           >

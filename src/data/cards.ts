@@ -63,13 +63,13 @@ export const isMatchup = (c: Card): boolean => c.type === 'matchup';
  * Duplicates are real array slots, so two players can draw the same white challenge in a
  * hole. `drawDistinct` selects distinct slots, which preserves that behaviour.
  */
-export function buildDrawPool(mode: GameMode): Card[] {
+export function buildDrawPool(mode: GameMode, includeMatchups = true): Card[] {
   const pool: Card[] = [];
   for (const card of CARDS) {
     if (card.type === 'white') {
       pool.push(card, card); // 2 copies
     } else if (card.type === 'matchup') {
-      pool.push(card); // 1 copy, both modes
+      if (includeMatchups) pool.push(card); // 1 copy, both modes (unless disabled)
     } else if (card.type === 'black' && mode === 'pro') {
       pool.push(card); // 1 copy, pro only
     }
