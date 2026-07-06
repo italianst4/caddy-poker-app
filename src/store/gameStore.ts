@@ -1,9 +1,10 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { buildDrawPool, drawDistinct, type GameMode } from '../data/cards';
-import { drawCaddies, caddyEffect } from '../data/caddyCards';
+import { buildDrawPool, drawDistinct, cardById, type GameMode } from '../data/cards';
+import { drawCaddies, caddyEffect, caddyById } from '../data/caddyCards';
 import { buildDeck, shuffle, type PokerCard } from '../data/pokerDeck';
+import { track, startGame, registerConfig } from '../analytics';
 
 export type Step =
   | 'home'
@@ -239,7 +240,10 @@ export const useGame = create<GameState>()(
           return { players };
         }),
 
-      setPlayers: (names, avatars) => set({ players: names, avatars }),
+      setPlayers: (names, avatars) => {
+        avatars.forEach((a) => track('avatar_selected', { avatar_index: a }));
+        set({ players: names, avatars });
+      },
 
       setHoles: (holes) => set({ holes }),
       setMode: (mode) => set({ mode }),
@@ -258,6 +262,25 @@ export const useGame = create<GameState>()(
         set((s) => {
           const players = s.players.map((p, i) => (p.trim() === '' ? DEFAULT_NAMES[i] : p));
           const firstHole = drawCardsFor({ mode: s.mode, includeMatchups: s.includeMatchups });
+          startGame();
+          registerConfig({
+            mode: s.mode,
+            matchups: s.includeMatchups,
+            caddies: s.includeCaddies,
+            virtual_deck: s.useVirtualPokerDeck,
+            no_poker_deck: s.noPokerDeck,
+            live_activity: s.showLiveActivity,
+          });
+          track('game_started', {
+            players: players.length,
+            holes: s.holes,
+            mode: s.mode,
+            matchups: s.includeMatchups,
+            caddies: s.includeCaddies,
+            virtual_deck: s.useVirtualPokerDeck,
+            no_poker_deck: s.noPokerDeck,
+            live_activity: s.showLiveActivity,
+          });
           return {
             players,
             step: 'round',
@@ -277,6 +300,14 @@ export const useGame = create<GameState>()(
           const playerIdx = s.pickOrder[s.pickTurn] ?? s.pickTurn;
           const holeAssign = { ...(s.assignment[s.currentHole] ?? {}) };
           holeAssign[playerIdx] = position;
+          const cardId = s.holeCards[s.currentHole]?.[position];
+          if (cardId) {
+            track('challenge_selected', {
+              card_id: cardId,
+              card_name: cardById(cardId)?.name,
+              tee: s.mode,
+            });
+          }
           return { assignment: { ...s.assignment, [s.currentHole]: holeAssign } };
         }),
 
@@ -296,7 +327,13 @@ export const useGame = create<GameState>()(
         ),
 
       pickCaddy: (position) =>
-        set((s) => ({ caddyAssignment: { ...s.caddyAssignment, [s.caddyTurn]: position } })),
+        set((s) => {
+          const cardId = s.caddyCards[position];
+          if (cardId) {
+            track('caddy_selected', { card_id: cardId, card_name: caddyById(cardId)?.name, context: 'physical' });
+          }
+          return { caddyAssignment: { ...s.caddyAssignment, [s.caddyTurn]: position } };
+        }),
 
       advanceCaddyTurn: () =>
         set((s) => {
@@ -334,10 +371,16 @@ export const useGame = create<GameState>()(
       pokerReady: () => set((s) => ({ pokerPhase: (s.includeCaddies ? 'caddy' : 'deal') as PokerPhase })),
 
       pickPokerCaddy: (position) =>
-        set((s) => ({
-          pokerCaddyAssignment: { ...s.pokerCaddyAssignment, [s.pokerTurn]: position },
-          pokerPhase: 'deal' as PokerPhase,
-        })),
+        set((s) => {
+          const cardId = s.caddyCards[position];
+          if (cardId) {
+            track('caddy_selected', { card_id: cardId, card_name: caddyById(cardId)?.name, context: 'virtual' });
+          }
+          return {
+            pokerCaddyAssignment: { ...s.pokerCaddyAssignment, [s.pokerTurn]: position },
+            pokerPhase: 'deal' as PokerPhase,
+          };
+        }),
 
       dealPokerCards: () =>
         set((s) => {
@@ -415,6 +458,12 @@ export const useGame = create<GameState>()(
           const nextId = drawDistinct(candidates, 1)[0]?.id ?? currentId;
           const holeCards = (s.holeCards[s.currentHole] ?? []).slice();
           holeCards[position] = nextId;
+          track('card_redraw', {
+            from_card_id: currentId,
+            from_card_name: currentId ? cardById(currentId)?.name : undefined,
+            to_card_id: nextId,
+            to_card_name: nextId ? cardById(nextId)?.name : undefined,
+          });
           return { holeCards: { ...s.holeCards, [s.currentHole]: holeCards } };
         }),
 
@@ -429,10 +478,13 @@ export const useGame = create<GameState>()(
       // A matchup card was flipped: the whole hole becomes a single head-to-head.
       // Remaining players don't pick; earlier picks are ignored for scoring.
       triggerMatchup: (cardId) =>
-        set((s) => ({
-          phase: 'matchup' as Phase,
-          matchup: { ...s.matchup, [s.currentHole]: { cardId, winner: null } },
-        })),
+        set((s) => {
+          track('matchup_played', { card_id: cardId, card_name: cardById(cardId)?.name });
+          return {
+            phase: 'matchup' as Phase,
+            matchup: { ...s.matchup, [s.currentHole]: { cardId, winner: null } },
+          };
+        }),
 
       setMatchupWinner: (playerIdx) =>
         set((s) => {
@@ -449,6 +501,15 @@ export const useGame = create<GameState>()(
         set((s) => {
           const holeResults = { ...(s.results[s.currentHole] ?? {}) };
           holeResults[playerIdx] = result;
+          const position = s.assignment[s.currentHole]?.[playerIdx];
+          const cardId = position != null ? s.holeCards[s.currentHole]?.[position] : undefined;
+          if (cardId) {
+            track('challenge_scored', {
+              card_id: cardId,
+              card_name: cardById(cardId)?.name,
+              achieved: result === 'achieved',
+            });
+          }
           return { results: { ...s.results, [s.currentHole]: holeResults } };
         }),
 
@@ -484,7 +545,12 @@ export const useGame = create<GameState>()(
           return { step: 'results' as Step };
         }),
 
-      reset: () =>
+      reset: () => {
+        const prev = get();
+        // Only report a game that actually started (avoids stray resets from the home screen).
+        if (prev.step !== 'home') {
+          track('game_ended', { holes_selected: prev.holes, holes_played: prev.currentHole });
+        }
         set({
           step: 'home',
           transition: null,
@@ -511,7 +577,8 @@ export const useGame = create<GameState>()(
           pokerHands: {},
           pokerSelection: {},
           pokerMulliganOffer: {},
-        }),
+        });
+      },
 
       // Final poker-card tally: matchup winner gets MATCHUP_REWARD; otherwise +1 per Achieved.
       pokerCardCount: (playerIdx) => {

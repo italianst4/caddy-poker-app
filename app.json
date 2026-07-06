@@ -45,7 +45,12 @@
         }
       ],
       "expo-video",
-      "./plugins/withScriptSandboxDisabled"
-    ]
+      "./plugins/withScriptSandboxDisabled",
+      "expo-localization"
+    ],
+    "extra": {
+      "posthogKey": "phc_tyNKt3bwVCyPfJy626fUkDr8ZffucfwcVaJknDLhGNoC",
+      "posthogHost": "https://us.i.posthog.com"
+    }
   }
 }

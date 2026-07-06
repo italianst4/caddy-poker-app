@@ -12,7 +12,11 @@ import { LandscapeBackground } from '../components/LandscapeBackground';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useGame } from '../store/gameStore';
 import { playGolfHit } from '../sounds';
+import { track } from '../analytics';
 import { colors, radius, spacing } from '../theme';
+
+/** Record a menu switch flip (no PII — just which toggle and its new value). */
+const toggle = (name: string, enabled: boolean) => track('menu_toggle', { toggle: name, enabled });
 
 export function MenuScreen() {
   const mode = useGame((s) => s.mode);
@@ -55,7 +59,10 @@ export function MenuScreen() {
               </View>
               <Switch
                 value={includeBlackTees}
-                onValueChange={(v) => setMode(v ? 'pro' : 'amateur')}
+                onValueChange={(v) => {
+                  toggle('black_tees', v);
+                  setMode(v ? 'pro' : 'amateur');
+                }}
                 trackColor={{ true: colors.primary, false: 'rgba(255,255,255,0.25)' }}
                 thumbColor={colors.white}
               />
@@ -68,7 +75,10 @@ export function MenuScreen() {
               </View>
               <Switch
                 value={includeMatchups}
-                onValueChange={setIncludeMatchups}
+                onValueChange={(v) => {
+                  toggle('matchups', v);
+                  setIncludeMatchups(v);
+                }}
                 trackColor={{ true: colors.primary, false: 'rgba(255,255,255,0.25)' }}
                 thumbColor={colors.white}
               />
@@ -81,7 +91,10 @@ export function MenuScreen() {
               </View>
               <Switch
                 value={includeCaddies}
-                onValueChange={setIncludeCaddies}
+                onValueChange={(v) => {
+                  toggle('caddies', v);
+                  setIncludeCaddies(v);
+                }}
                 trackColor={{ true: colors.primary, false: 'rgba(255,255,255,0.25)' }}
                 thumbColor={colors.white}
               />
@@ -94,7 +107,10 @@ export function MenuScreen() {
               </View>
               <Switch
                 value={noPokerDeck}
-                onValueChange={setNoPokerDeck}
+                onValueChange={(v) => {
+                  toggle('challenges_only', v);
+                  setNoPokerDeck(v);
+                }}
                 trackColor={{ true: colors.primary, false: 'rgba(255,255,255,0.25)' }}
                 thumbColor={colors.white}
               />
@@ -107,7 +123,10 @@ export function MenuScreen() {
               </View>
               <Switch
                 value={useVirtualPokerDeck}
-                onValueChange={setUseVirtualPokerDeck}
+                onValueChange={(v) => {
+                  toggle('virtual_deck', v);
+                  setUseVirtualPokerDeck(v);
+                }}
                 disabled={noPokerDeck}
                 trackColor={{ true: colors.primary, false: 'rgba(255,255,255,0.25)' }}
                 thumbColor={colors.white}
@@ -121,7 +140,10 @@ export function MenuScreen() {
               </View>
               <Switch
                 value={showLiveActivity}
-                onValueChange={setShowLiveActivity}
+                onValueChange={(v) => {
+                  toggle('live_activity', v);
+                  setShowLiveActivity(v);
+                }}
                 trackColor={{ true: colors.primary, false: 'rgba(255,255,255,0.25)' }}
                 thumbColor={colors.white}
               />

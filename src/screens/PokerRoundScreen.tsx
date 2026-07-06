@@ -33,6 +33,7 @@ import {
 } from '../data/pokerDeck';
 import { useGame } from '../store/gameStore';
 import { playGolfCrowd } from '../sounds';
+import { track } from '../analytics';
 import { CARD_RATIO, colors, radius, spacing } from '../theme';
 
 type SortMode = 'dealt' | 'rank' | 'suit';
@@ -476,6 +477,27 @@ function RevealPhase() {
   const winnerLocal = pickWinners(orderedResults);
   const winners = new Set(winnerLocal.map((li) => participants[li]));
   const losers = participants.filter((i) => !winners.has(i));
+
+  // Report the poker finale once on reveal: which caddy cards actually helped, and the
+  // winning hand(s). No names — only card ids, hand names, and a tie flag.
+  useEffect(() => {
+    for (const idx of participants) {
+      const cards = selectedCardsFor(idx);
+      const effect = caddyEffect(caddyCards[pokerCaddyAssignment[idx]]);
+      const caddyId = caddyCards[pokerCaddyAssignment[idx]];
+      const caddyUsed =
+        !!caddyId &&
+        (cards.some((c) => isWildCard(c, effect)) ||
+          evaluateHand(cards, { kind: 'none' }).cat < results[idx].cat);
+      if (caddyUsed) {
+        track('caddy_used', { card_id: caddyId, card_name: caddyById(caddyId)?.name });
+      }
+    }
+    for (const idx of winners) {
+      track('poker_winner', { hand_name: results[idx].name, tie: winners.size > 1 });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const onGameOver = () => {
     Alert.alert('Game over?', 'Return to the main menu?', [
