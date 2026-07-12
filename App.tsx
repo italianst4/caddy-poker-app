@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useGame, type Step } from './src/store/gameStore';
+import { initEntitlements, useHasAccess } from './src/entitlements';
 import { StackHost } from './src/components/StackHost';
 import { BackgroundMusic } from './src/components/BackgroundMusic';
 import { LiveActivityController } from './src/components/LiveActivityController';
@@ -9,6 +10,7 @@ import { colors } from './src/theme';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { MenuScreen } from './src/screens/MenuScreen';
 import { HowToPlayScreen } from './src/screens/HowToPlayScreen';
+import { PaywallScreen } from './src/screens/PaywallScreen';
 import { PlayerCountScreen } from './src/screens/PlayerCountScreen';
 import { CaddyDrawScreen } from './src/screens/CaddyDrawScreen';
 import { CaddyResultsScreen } from './src/screens/CaddyResultsScreen';
@@ -25,16 +27,25 @@ export default function App() {
   const step = useGame((s) => s.step);
   const transition = useGame((s) => s.transition);
   const goTo = useGame((s) => s.goTo);
+  const hasAccess = useHasAccess();
   const [hydrated, setHydrated] = useState(useGame.persist.hasHydrated());
+  const [entReady, setEntReady] = useState(false);
 
   useEffect(() => {
     // Wait for persisted round state to load before rendering (so we resume correctly).
     const unsub = useGame.persist.onFinishHydration(() => setHydrated(true));
     if (useGame.persist.hasHydrated()) setHydrated(true);
+    // Resolve trial/purchase status before first paint so we never flash a paywall.
+    initEntitlements().finally(() => setEntReady(true));
     return unsub;
   }, []);
 
-  if (!hydrated) {
+  // A backgrounded round could resume past the gate after the trial expired — if access has
+  // lapsed and we're on a gameplay step, force the paywall.
+  const GATED = step !== 'home' && step !== 'menu' && step !== 'howToPlay' && step !== 'paywall';
+  const routeKey: Step = !hasAccess && GATED ? 'paywall' : step;
+
+  if (!hydrated || !entReady) {
     return (
       <View style={styles.loading}>
         <StatusBar style="light" />
@@ -49,9 +60,9 @@ export default function App() {
       <BackgroundMusic />
       <LiveActivityController />
       <StackHost
-        routeKey={step}
+        routeKey={routeKey}
         transition={transition}
-        backKey={step === 'menu' ? 'home' : null}
+        backKey={routeKey === 'menu' ? 'home' : null}
         onSwipeBack={() => goTo('home')}
         render={(key) => renderStep(key as Step)}
       />
@@ -67,6 +78,8 @@ function renderStep(step: Step) {
       return <MenuScreen />;
     case 'howToPlay':
       return <HowToPlayScreen />;
+    case 'paywall':
+      return <PaywallScreen />;
     case 'count':
       return <PlayerCountScreen />;
     case 'names':

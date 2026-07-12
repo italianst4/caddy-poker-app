@@ -8,6 +8,13 @@ public class LiveActivityModule: Module {
   public func definition() -> ModuleDefinition {
     Name("LiveActivity")
 
+    // Build-channel detection (used to gate dev-only tools in JS). TestFlight ships a
+    // "sandboxReceipt"; the App Store ships a production "receipt". Dev builds have no
+    // production receipt either, so this is false anywhere except App Store production.
+    Function("isProductionAppStore") { () -> Bool in
+      Bundle.main.appStoreReceiptURL?.lastPathComponent == "receipt"
+    }
+
     Function("areEnabled") { () -> Bool in
       if #available(iOS 16.2, *) {
         return ActivityAuthorizationInfo().areActivitiesEnabled

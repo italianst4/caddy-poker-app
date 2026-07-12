@@ -11,6 +11,8 @@ import Animated, { SlideInRight } from 'react-native-reanimated';
 import { LandscapeBackground } from '../components/LandscapeBackground';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useGame } from '../store/gameStore';
+import { devExpireTrial, devResetTrial, restore, useIsUnlocked, useTrialDaysLeft } from '../entitlements';
+import { devToolsEnabled } from '../buildEnv';
 import { playGolfHit } from '../sounds';
 import { track } from '../analytics';
 import { colors, radius, spacing } from '../theme';
@@ -32,12 +34,30 @@ export function MenuScreen() {
   const showLiveActivity = useGame((s) => s.showLiveActivity);
   const setShowLiveActivity = useGame((s) => s.setShowLiveActivity);
   const goTo = useGame((s) => s.goTo);
+  const isUnlocked = useIsUnlocked();
+  const daysLeft = useTrialDaysLeft();
 
   const includeBlackTees = mode === 'pro';
 
-  const onRestore = () => {
-    // TODO: hook up to Apple Payments; on success, show the restored purchase details.
-    Alert.alert('Coming Soon', 'Restore Purchase is coming soon.', [{ text: 'OK' }]);
+  // Hidden dev tools: long-press the copyright to force trial expiry / reset (for testing
+  // the hard paywall without waiting out the trial). Not discoverable in normal use.
+  const onDevTools = () => {
+    Alert.alert('Dev · Trial', undefined, [
+      { text: 'Expire trial now', onPress: () => devExpireTrial() },
+      { text: 'Reset trial (full)', onPress: () => devResetTrial() },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  const onRestore = async () => {
+    const ok = await restore();
+    Alert.alert(
+      ok ? 'Purchase restored' : 'Nothing to restore',
+      ok
+        ? 'Your full game access has been restored.'
+        : 'We couldn’t find a previous purchase on this Apple ID.',
+      [{ text: 'OK' }]
+    );
   };
 
   return (
@@ -150,6 +170,23 @@ export function MenuScreen() {
             </View>
           </View>
 
+          {!isUnlocked && (
+            <Pressable
+              onPress={() => {
+                playGolfHit();
+                goTo('paywall', 'push');
+              }}
+              style={({ pressed }) => [styles.unlockBtn, styles.firstButton, pressed && styles.pressed]}
+            >
+              <Text style={styles.unlockText}>Unlock Full Game</Text>
+              <Text style={styles.unlockSub}>
+                {daysLeft > 0
+                  ? `${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} left in your free trial`
+                  : 'Free trial ended'}
+              </Text>
+            </Pressable>
+          )}
+
           <Pressable
             onPress={() => {
               playGolfHit();
@@ -157,7 +194,11 @@ export function MenuScreen() {
               // remounts it and restarts the video, doubling the opening audio.
               goTo('howToPlay');
             }}
-            style={({ pressed }) => [styles.restoreBtn, styles.firstButton, pressed && styles.pressed]}
+            style={({ pressed }) => [
+              styles.restoreBtn,
+              isUnlocked && styles.firstButton,
+              pressed && styles.pressed,
+            ]}
           >
             <Text style={styles.restoreText}>How To Play</Text>
           </Pressable>
@@ -170,7 +211,13 @@ export function MenuScreen() {
           </Pressable>
         </View>
 
-        <Text style={styles.copyright}>© 2026 - Tangent Thinking LLC</Text>
+        {devToolsEnabled ? (
+          <Pressable onLongPress={onDevTools} delayLongPress={900}>
+            <Text style={styles.copyright}>© 2026 - Tangent Thinking LLC</Text>
+          </Pressable>
+        ) : (
+          <Text style={styles.copyright}>© 2026 - Tangent Thinking LLC</Text>
+        )}
         </SafeAreaView>
       </Animated.View>
     </View>
@@ -208,6 +255,16 @@ const styles = StyleSheet.create({
   // Extra breathing room between the toggles and the first button.
   firstButton: { marginTop: spacing.md * 2 },
   restoreText: { color: colors.gold, fontSize: 17, fontWeight: '800' },
+  // Gold-filled to stand out as the primary upsell.
+  unlockBtn: {
+    backgroundColor: colors.gold,
+    borderRadius: radius.md,
+    paddingVertical: spacing.md,
+    marginHorizontal: spacing.lg,
+    alignItems: 'center',
+  },
+  unlockText: { color: colors.primaryText, fontSize: 17, fontWeight: '900' },
+  unlockSub: { color: colors.primaryText, fontSize: 12, fontWeight: '700', opacity: 0.75, marginTop: 2 },
   pressed: { opacity: 0.7 },
   copyright: {
     color: colors.white,

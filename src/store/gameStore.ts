@@ -10,6 +10,7 @@ export type Step =
   | 'home'
   | 'menu'
   | 'howToPlay'
+  | 'paywall'
   | 'count'
   | 'names'
   | 'holes'

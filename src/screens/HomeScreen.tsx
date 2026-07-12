@@ -22,6 +22,7 @@ import Animated, {
 import { LandscapeBackground } from '../components/LandscapeBackground';
 import { MusicControl } from '../components/MusicControl';
 import { useGame } from '../store/gameStore';
+import { useHasAccess } from '../entitlements';
 import { playBallInHole } from '../sounds';
 import { colors, spacing } from '../theme';
 
@@ -29,6 +30,7 @@ export function HomeScreen() {
   const { width, height } = useWindowDimensions();
   const goTo = useGame((s) => s.goTo);
   const reset = useGame((s) => s.reset);
+  const hasAccess = useHasAccess();
 
   // Entrance: logo bounces in → tagline fades → button fades. `exit` runs on New Round.
   const logoScale = useSharedValue(0);
@@ -63,6 +65,11 @@ export function HomeScreen() {
   }, [logoOpacity, logoScale, taglineOpacity, buttonOpacity, wiggle]);
 
   const start = () => {
+    // Trial expired and not unlocked → send to the paywall instead of starting a round.
+    if (!hasAccess) {
+      goTo('paywall', 'push');
+      return;
+    }
     playBallInHole();
     exit.value = withTiming(1, { duration: 300, easing: Easing.in(Easing.cubic) }, (fin) => {
       if (fin) {
@@ -109,7 +116,7 @@ export function HomeScreen() {
 
         <View style={[styles.center, { paddingTop: height * 0.08 }]}>
           <Animated.Image
-            source={require('../../assets/cards/cp-logo.png')}
+            source={require('../../assets/caddypoker-logo.png')}
             style={[styles.logo, { width: logoSize, height: logoSize }, logoStyle]}
             resizeMode="contain"
           />

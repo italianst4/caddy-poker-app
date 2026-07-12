@@ -7,11 +7,13 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
+      "buildNumber": "3",
       "bundleIdentifier": "com.amontalbano.caddypoker",
       "appleTeamId": "B26CL9L2G8",
       "infoPlist": {
-        "NSSupportsLiveActivities": true
+        "NSSupportsLiveActivities": true,
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -46,11 +48,15 @@
       ],
       "expo-video",
       "./plugins/withScriptSandboxDisabled",
-      "expo-localization"
+      "expo-localization",
+      "expo-secure-store"
     ],
     "extra": {
       "posthogKey": "phc_tyNKt3bwVCyPfJy626fUkDr8ZffucfwcVaJknDLhGNoC",
-      "posthogHost": "https://us.i.posthog.com"
+      "posthogHost": "https://us.i.posthog.com",
+      "revenueCatKeyIos": "appl_yPimsqbwqcYfdOjSFbgjBvRWZxF",
+      "unlockProductId": "com.amontalbano.caddypoker.fullunlock",
+      "trialDays": 30
     }
   }
 }
