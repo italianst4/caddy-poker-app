@@ -11,6 +11,8 @@ export function HolesScreen() {
   const { width } = useWindowDimensions();
   const setHoles = useGame((s) => s.setHoles);
   const goTo = useGame((s) => s.goTo);
+  const beginOpenPack = useGame((s) => s.beginOpenPack);
+  const hasOpenedFirstPack = useGame((s) => s.ownedPacks['white-tees']);
 
   const gap = spacing.md;
   const squareSize = Math.min(width * 0.6, 230);
@@ -18,7 +20,14 @@ export function HolesScreen() {
   const choose = (h: 9 | 18) => {
     playGolfHit();
     setHoles(h);
-    goTo('overview');
+    // First-ever play: open the free White Tees challenge pack now (right after the hole
+    // count), then continue to the ready-to-play Overview. Afterwards it's owned, so we go
+    // straight to the Overview.
+    if (!hasOpenedFirstPack) {
+      beginOpenPack('white-tees', { onboarding: true });
+    } else {
+      goTo('overview');
+    }
   };
 
   return (

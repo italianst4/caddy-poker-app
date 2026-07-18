@@ -9,11 +9,11 @@ import { LiveActivityController } from './src/components/LiveActivityController'
 import { colors } from './src/theme';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { MenuScreen } from './src/screens/MenuScreen';
+import { CardPacksScreen } from './src/screens/CardPacksScreen';
+import { OpenPackScreen } from './src/screens/OpenPackScreen';
 import { HowToPlayScreen } from './src/screens/HowToPlayScreen';
 import { PaywallScreen } from './src/screens/PaywallScreen';
 import { PlayerCountScreen } from './src/screens/PlayerCountScreen';
-import { CaddyDrawScreen } from './src/screens/CaddyDrawScreen';
-import { CaddyResultsScreen } from './src/screens/CaddyResultsScreen';
 import { NamesScreen } from './src/screens/NamesScreen';
 import { HolesScreen } from './src/screens/HolesScreen';
 import { ModeScreen } from './src/screens/ModeScreen';
@@ -42,7 +42,8 @@ export default function App() {
 
   // A backgrounded round could resume past the gate after the trial expired — if access has
   // lapsed and we're on a gameplay step, force the paywall.
-  const GATED = step !== 'home' && step !== 'menu' && step !== 'howToPlay' && step !== 'paywall';
+  const UNGATED: Step[] = ['home', 'menu', 'howToPlay', 'paywall', 'packs', 'openPack'];
+  const GATED = !UNGATED.includes(step);
   const routeKey: Step = !hasAccess && GATED ? 'paywall' : step;
 
   if (!hydrated || !entReady) {
@@ -76,6 +77,10 @@ function renderStep(step: Step) {
       return <HomeScreen />;
     case 'menu':
       return <MenuScreen />;
+    case 'packs':
+      return <CardPacksScreen />;
+    case 'openPack':
+      return <OpenPackScreen />;
     case 'howToPlay':
       return <HowToPlayScreen />;
     case 'paywall':
@@ -96,10 +101,6 @@ function renderStep(step: Step) {
       return <Scorecard />;
     case 'results':
       return <ResultsScreen />;
-    case 'caddy':
-      return <CaddyDrawScreen />;
-    case 'caddyResults':
-      return <CaddyResultsScreen />;
     case 'poker':
       return <PokerRoundScreen />;
     default:

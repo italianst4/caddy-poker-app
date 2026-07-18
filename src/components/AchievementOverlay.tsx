@@ -49,18 +49,27 @@ function FlyingCard({ card, from, to }: { card: Card; from: Rect; to: Rect }) {
 }
 
 /* ---------------- bottom slide-up message ---------------- */
-function BottomToast({ message, bottom }: { message: string; bottom: number }) {
+export function BottomToast({
+  message,
+  bottom,
+  delay = 400,
+}: {
+  message: string;
+  bottom: number;
+  /** How long to wait before sliding in (default 400ms, to let a flying card land first). */
+  delay?: number;
+}) {
   const p = useSharedValue(0);
   useEffect(() => {
-    // Wait for the card to fly up first, then slide in, hold a beat, slide out.
+    // Slide in, hold a beat, slide out.
     p.value = withDelay(
-      400,
+      delay,
       withSequence(
         withTiming(1, { duration: 320, easing: Easing.out(Easing.cubic) }),
         withDelay(1350, withTiming(0, { duration: 320, easing: Easing.in(Easing.cubic) }))
       )
     );
-  }, [p]);
+  }, [p, delay]);
 
   const style = useAnimatedStyle(() => ({
     opacity: p.value,

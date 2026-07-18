@@ -70,6 +70,8 @@ export function HomeScreen() {
       goTo('paywall', 'push');
       return;
     }
+    // First-ever play now opens the free White Tees pack later in setup — after the hole
+    // count is chosen (see HolesScreen) — so New Round always heads straight into setup.
     playBallInHole();
     exit.value = withTiming(1, { duration: 300, easing: Easing.in(Easing.cubic) }, (fin) => {
       if (fin) {

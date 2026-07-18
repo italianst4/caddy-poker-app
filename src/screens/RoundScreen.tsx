@@ -1,19 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, SafeAreaView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Image, Pressable, SafeAreaView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { ScreenLayout } from '../components/ScreenLayout';
 import { PrimaryButton } from '../components/PrimaryButton';
-import { SelectTile } from '../components/SelectTile';
 import { CardBack } from '../components/CardBack';
 import { CardArt } from '../components/CardArt';
 import { FlipCard } from '../components/FlipCard';
 import { CardViewer } from '../components/CardViewer';
-import { Celebration } from '../components/Celebration';
 import { SlideUpFooter } from '../components/SlideUpFooter';
 import { ScoreChips } from '../components/Scorecard';
-import { AchievementOverlay, type Rect } from '../components/AchievementOverlay';
+import { AchievementOverlay, BottomToast, type Rect } from '../components/AchievementOverlay';
+import { ConfettiBurst } from '../components/ConfettiBurst';
 import { CardBurst } from '../components/CardBurst';
 import { useGame, MATCHUP_REWARD } from '../store/gameStore';
+import { GOLFERS, MAX_GOLFER_RATIO } from '../data/golfers';
 import { cardById, isMatchup, type Card } from '../data/cards';
 import { buildHoleMessage } from '../data/holeMessages';
 import { CARD_RATIO, colors, radius, spacing } from '../theme';
@@ -180,9 +180,15 @@ function TransitionPhase() {
 /* ------------------------------------------------------------------ */
 /* Matchup phase: the whole group competes for one card; pick a winner. */
 /* ------------------------------------------------------------------ */
+// Size of the tappable golfer portrait in the matchup, and its surrounding frame padding.
+const MATCHUP_GOLFER = 120;
+const MATCHUP_GOLFER_PAD = spacing.sm;
+const MATCHUP_FRAME = MATCHUP_GOLFER + MATCHUP_GOLFER_PAD * 2;
+
 function MatchupPhase() {
   const { width } = useWindowDimensions();
   const players = useGame((s) => s.players);
+  const avatars = useGame((s) => s.avatars);
   const currentHole = useGame((s) => s.currentHole);
   const holes = useGame((s) => s.holes);
   const matchup = useGame((s) => s.matchup);
@@ -190,7 +196,9 @@ function MatchupPhase() {
   const nextHole = useGame((s) => s.nextHole);
   const viewScorecard = useGame((s) => s.viewScorecard);
 
-  const [celebration, setCelebration] = useState<string | null>(null);
+  // A single active celebration (confetti burst behind a golfer + bottom toast), keyed by
+  // an incrementing id so tapping a different winner remounts and replays it.
+  const [celebration, setCelebration] = useState<{ id: number; winner: number; message: string } | null>(null);
 
   const info = matchup[currentHole];
   const card = info ? cardById(info.cardId) : undefined;
@@ -199,10 +207,22 @@ function MatchupPhase() {
 
   const cardWidth = Math.min(width * 0.42, 180);
 
+  // Auto-clear the celebration once its confetti + toast have finished.
+  useEffect(() => {
+    if (!celebration) return;
+    const id = setTimeout(() => setCelebration(null), 2600);
+    return () => clearTimeout(id);
+  }, [celebration]);
+
   const onSelectWinner = (i: number) => {
+    const isNewWinner = winner !== i;
     setMatchupWinner(i);
-    if (winner !== i) {
-      setCelebration(`${players[i]} earned ${MATCHUP_REWARD} poker cards!`);
+    if (isNewWinner) {
+      setCelebration((prev) => ({
+        id: (prev?.id ?? 0) + 1,
+        winner: i,
+        message: `${players[i]} earned ${MATCHUP_REWARD} poker cards!`,
+      }));
     }
   };
 
@@ -216,19 +236,45 @@ function MatchupPhase() {
       >
         <View style={styles.matchupTop}>
           {card ? <CardArt card={card} style={{ width: cardWidth }} /> : null}
-          <Text style={styles.matchupPrompt}>Who won the matchup?</Text>
+          <Text style={styles.matchupPrompt}>Tap the golfer who won!</Text>
         </View>
 
-        <View style={styles.matchupList}>
-          {players.map((name, i) => (
-            <SelectTile
-              key={i}
-              label={name}
-              compact
-              selected={winner === i}
-              onPress={() => onSelectWinner(i)}
-            />
-          ))}
+        <View style={styles.matchupGolfers}>
+          {players.map((name, i) => {
+            const g = GOLFERS[avatars[i] ?? i] ?? GOLFERS[0];
+            const isWinner = winner === i;
+            return (
+              <Pressable
+                key={i}
+                onPress={() => onSelectWinner(i)}
+                style={({ pressed }) => [styles.golferTile, pressed && styles.golferPressed]}
+              >
+                <View style={[styles.golferFrame, isWinner && styles.golferFrameWin]}>
+                  {/* Confetti sits behind the portrait, so it shoots out from behind the golfer. */}
+                  {celebration?.winner === i ? (
+                    <View key={celebration.id} pointerEvents="none" style={StyleSheet.absoluteFill}>
+                      <ConfettiBurst
+                        originX={MATCHUP_FRAME / 2}
+                        originY={MATCHUP_FRAME / 2}
+                        count={32}
+                      />
+                    </View>
+                  ) : null}
+                  <Image
+                    source={g.source}
+                    resizeMode="contain"
+                    style={{ width: MATCHUP_GOLFER, height: MATCHUP_GOLFER }}
+                  />
+                </View>
+                <Text
+                  style={[styles.golferName, isWinner && styles.golferNameWin]}
+                  numberOfLines={1}
+                >
+                  {name}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
         {/* Clearance so the list isn't hidden behind the slide-up footer. */}
         <View style={{ height: 76 }} />
@@ -242,8 +288,12 @@ function MatchupPhase() {
         />
       </SlideUpFooter>
 
+      {/* Bottom slide-up toast, matching the achievement toasts elsewhere. Sits above the
+          slide-up "Next Hole" footer so they don't overlap. */}
       {celebration ? (
-        <Celebration message={celebration} onDone={() => setCelebration(null)} />
+        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+          <BottomToast key={celebration.id} message={celebration.message} bottom={116} delay={0} />
+        </View>
       ) : null}
     </View>
   );
@@ -255,6 +305,7 @@ function MatchupPhase() {
 function ScorePhase() {
   const { width, height } = useWindowDimensions();
   const players = useGame((s) => s.players);
+  const avatars = useGame((s) => s.avatars);
   const currentHole = useGame((s) => s.currentHole);
   const holes = useGame((s) => s.holes);
   const holeCards = useGame((s) => s.holeCards);
@@ -302,6 +353,11 @@ function ScorePhase() {
   const cardWidth = Math.max(110, Math.min(widthCap, heightCap));
   // Fixed cell footprint so a cleared cell leaves its slot empty (others don't move).
   const cellHeight = Math.round(cardWidth / CARD_RATIO) + 19 + 34 + spacing.sm * 2 + 4;
+
+  // Players who cleared their challenge this hole — shown as golfer portraits.
+  const winnerIdxs = players.map((_, i) => i).filter((i) => holeResults[i] === 'achieved');
+  // Match the portrait size used on the add-players (PlayerCountScreen) grid.
+  const headSize = Math.min((width - spacing.lg * 2 - spacing.md) / 2 / MAX_GOLFER_RATIO, height * 0.26);
 
   // Cheeky end-of-hole message, chosen once per hole when every card is cleared.
   const summary = useMemo(() => {
@@ -406,9 +462,23 @@ function ScorePhase() {
         ) : showEnd && summary ? (
           <Animated.View
             entering={FadeInDown.duration(450)}
-            style={[styles.summary, { marginTop: height * 0.34 }]}
+            style={[styles.summary, { marginTop: spacing.lg }]}
           >
-            <Text style={styles.summaryEmoji}>{summary.emoji}</Text>
+            {winnerIdxs.length > 0 ? (
+              <View style={styles.summaryWinners}>
+                {winnerIdxs.map((i) => {
+                  const g = GOLFERS[avatars[i] ?? i] ?? GOLFERS[0];
+                  return (
+                    <Image
+                      key={i}
+                      source={g.source}
+                      resizeMode="contain"
+                      style={{ width: headSize * g.ratio, height: headSize }}
+                    />
+                  );
+                })}
+              </View>
+            ) : null}
             <Text style={styles.summaryText}>{summary.text}</Text>
           </Animated.View>
         ) : null}
@@ -540,7 +610,36 @@ const styles = StyleSheet.create({
   // matchup phase
   matchupTop: { alignItems: 'center', gap: spacing.sm, marginTop: spacing.xs },
   matchupPrompt: { color: colors.text, fontSize: 18, fontWeight: '800' },
-  matchupList: { gap: spacing.sm, marginTop: spacing.md },
+  matchupGolfers: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+    gap: spacing.lg,
+    marginTop: spacing.lg,
+  },
+  golferTile: { alignItems: 'center', gap: spacing.xs },
+  golferPressed: { opacity: 0.85 },
+  golferFrame: {
+    width: MATCHUP_FRAME,
+    height: MATCHUP_FRAME,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.lg,
+    borderWidth: 3,
+    borderColor: 'transparent',
+  },
+  golferFrameWin: {
+    borderColor: colors.gold,
+    backgroundColor: colors.bgElevated,
+  },
+  golferName: {
+    color: colors.text,
+    fontSize: 18,
+    fontWeight: '800',
+    maxWidth: MATCHUP_FRAME,
+  },
+  golferNameWin: { color: colors.gold, fontWeight: '900' },
 
   // score phase
   scoreGrid: {
@@ -564,17 +663,24 @@ const styles = StyleSheet.create({
   summary: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.xl,
     gap: spacing.md,
   },
-  summaryEmoji: { fontSize: 64 },
+  summaryWinners: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+    gap: spacing.md,
+    marginBottom: spacing.xs,
+  },
   summaryText: {
     color: colors.text,
-    fontSize: 20,
+    fontSize: 30,
     fontWeight: '800',
     textAlign: 'center',
-    lineHeight: 28,
+    lineHeight: 42,
+    paddingHorizontal: spacing.lg,
   },
   markBtn: {
     flex: 1,

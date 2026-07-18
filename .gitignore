@@ -42,3 +42,6 @@ yarn-error.*
 
 # design source files (not needed in the app bundle)
 *.psd
+
+# EAS: App Store Connect API key (never commit)
+/credentials/

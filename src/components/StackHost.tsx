@@ -30,10 +30,12 @@ type Props = {
 };
 
 /**
- * iOS-style push/pop between two route keys. The incoming view slides full-width; the
- * outgoing view parallaxes at 1/3 speed and dims; the top card casts a leading shadow.
- * When `backKey` is set, the back screen stays mounted underneath and a left-edge pan
- * drives an interactive (finger-following) pop, just like UINavigationController.
+ * iOS-style push/pop between two route keys. The incoming view slides full-width; the outgoing
+ * view parallaxes at 1/3 speed and dims. Two fixed slots are always rendered — slot A (behind)
+ * holds the outgoing/back screen, slot B (front) ALWAYS holds `current`. Because `current` keeps a
+ * stable position in the tree, the screen you land on is never remounted when a transition settles,
+ * so its entrance animations don't replay (no "double flicker"). When `backKey` is set, a left-edge
+ * pan drives an interactive finger-following pop.
  */
 export function StackHost({ routeKey, transition, render, backKey = null, onSwipeBack }: Props) {
   const { width } = useWindowDimensions();
@@ -41,13 +43,11 @@ export function StackHost({ routeKey, transition, render, backKey = null, onSwip
   const [current, setCurrent] = useState(routeKey);
   const [previous, setPrevious] = useState<string | null>(null);
   const fromRef = useRef(routeKey);
-  const isPushRef = useRef(true);
 
-  // Timed transitions (push/pop via button).
   const progress = useSharedValue(0);
   const dir = useSharedValue(1); // 1 = push, 0 = pop
-  // Interactive edge-swipe (0 = current shown, 1 = popped).
-  const swipe = useSharedValue(0);
+  const transitioning = useSharedValue(0); // 1 while a timed push/pop animates
+  const swipe = useSharedValue(0); // interactive edge-swipe (0 = current shown, 1 = popped)
 
   const transitionRef = useRef(transition);
   transitionRef.current = transition;
@@ -55,8 +55,7 @@ export function StackHost({ routeKey, transition, render, backKey = null, onSwip
   previousRef.current = previous;
 
   // Instant (no-transition) route changes: sync `current` during render so we never paint the
-  // old screen for a frame. Without this, a reset-to-home briefly re-renders the outgoing
-  // screen with freshly-reset state (e.g. the poker screen flashing its "How this works" intro).
+  // old screen for a frame.
   if (transition == null && previous == null && current !== routeKey) {
     setCurrent(routeKey);
   }
@@ -78,14 +77,16 @@ export function StackHost({ routeKey, transition, render, backKey = null, onSwip
       setCurrent(routeKey);
       return;
     }
-    const push = t === 'push';
-    isPushRef.current = push;
-    dir.value = push ? 1 : 0;
+    dir.value = t === 'push' ? 1 : 0;
+    transitioning.value = 1;
     setPrevious(from);
     setCurrent(routeKey);
     progress.value = 0;
     progress.value = withTiming(1, { duration: DURATION, easing: EASING }, (finished) => {
-      if (finished) runOnJS(setPrevious)(null);
+      if (finished) {
+        transitioning.value = 0;
+        runOnJS(setPrevious)(null);
+      }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeKey]);
@@ -122,64 +123,51 @@ export function StackHost({ routeKey, transition, render, backKey = null, onSwip
     })
   ).current;
 
-  // ----- timed transition transforms -----
-  const frontStyle = useAnimatedStyle(() => {
-    const p = progress.value;
-    const tx = dir.value === 1 ? width * (1 - p) : width * p;
-    return { transform: [{ translateX: tx }] };
+  // slotA (child 0, behind): the outgoing screen during a transition, or the interactive-back
+  // screen at rest. slotB (child 1, front): ALWAYS `current`.
+  const slotAStyle = useAnimatedStyle(() => {
+    if (transitioning.value === 1) {
+      const p = progress.value;
+      const push = dir.value === 1;
+      return {
+        transform: [{ translateX: push ? -width * PARALLAX * p : width * p }],
+        zIndex: push ? 0 : 1,
+      };
+    }
+    return { transform: [{ translateX: -width * PARALLAX * (1 - swipe.value) }], zIndex: 0 };
   });
-  const backStyle = useAnimatedStyle(() => {
-    const p = progress.value;
-    const tx = dir.value === 1 ? -width * PARALLAX * p : -width * PARALLAX * (1 - p);
-    return { transform: [{ translateX: tx }] };
+  const slotBStyle = useAnimatedStyle(() => {
+    if (transitioning.value === 1) {
+      const p = progress.value;
+      const push = dir.value === 1;
+      return {
+        transform: [{ translateX: push ? width * (1 - p) : -width * PARALLAX * (1 - p) }],
+        zIndex: push ? 1 : 0,
+      };
+    }
+    return { transform: [{ translateX: swipe.value * width }], zIndex: 1 };
   });
-  const dimStyle = useAnimatedStyle(() => {
-    const p = progress.value;
-    return { opacity: dir.value === 1 ? DIM * p : DIM * (1 - p) };
+  const slotADim = useAnimatedStyle(() => {
+    if (transitioning.value === 1) return { opacity: dir.value === 1 ? DIM * progress.value : 0 };
+    return { opacity: DIM * (1 - swipe.value) };
+  });
+  const slotBDim = useAnimatedStyle(() => {
+    if (transitioning.value === 1) return { opacity: dir.value === 0 ? DIM * (1 - progress.value) : 0 };
+    return { opacity: 0 };
   });
 
-  // ----- interactive edge-swipe transforms -----
-  const swipeFrontStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: swipe.value * width }],
-  }));
-  const swipeBackStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: -width * PARALLAX * (1 - swipe.value) }],
-  }));
-  const swipeDimStyle = useAnimatedStyle(() => ({ opacity: DIM * (1 - swipe.value) }));
-
-  // Timed push/pop in progress.
-  if (previous != null) {
-    const front = isPushRef.current ? current : previous;
-    const back = isPushRef.current ? previous : current;
-    return (
-      <View style={StyleSheet.absoluteFill}>
-        <Animated.View style={[StyleSheet.absoluteFill, backStyle]}>
-          {render(back)}
-          <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.dim, dimStyle]} />
-        </Animated.View>
-        <Animated.View style={[StyleSheet.absoluteFill, styles.front, frontStyle]}>
-          {render(front)}
-        </Animated.View>
-      </View>
-    );
-  }
-
-  // At rest on a route that supports interactive back: keep the back screen mounted.
-  if (backKey != null) {
-    return (
-      <View style={StyleSheet.absoluteFill} {...pan.panHandlers}>
-        <Animated.View style={[StyleSheet.absoluteFill, swipeBackStyle]}>
-          {render(backKey)}
-          <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.dim, swipeDimStyle]} />
-        </Animated.View>
-        <Animated.View style={[StyleSheet.absoluteFill, styles.front, swipeFrontStyle]}>
-          {render(current)}
-        </Animated.View>
-      </View>
-    );
-  }
-
-  return <View style={StyleSheet.absoluteFill}>{render(current)}</View>;
+  return (
+    <View style={StyleSheet.absoluteFill} {...pan.panHandlers}>
+      <Animated.View style={[StyleSheet.absoluteFill, styles.front, slotAStyle]}>
+        {previous != null ? render(previous) : backKey != null ? render(backKey) : null}
+        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.dim, slotADim]} />
+      </Animated.View>
+      <Animated.View style={[StyleSheet.absoluteFill, styles.front, slotBStyle]}>
+        {render(current)}
+        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.dim, slotBDim]} />
+      </Animated.View>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({

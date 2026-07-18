@@ -1,144 +1,91 @@
-import { Alert, Image, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useState } from 'react';
+import { Image, Pressable, StyleSheet, Switch, Text, useWindowDimensions, View } from 'react-native';
 import { ScreenLayout } from '../components/ScreenLayout';
 import { PrimaryButton } from '../components/PrimaryButton';
+import { PackFront } from '../components/PackFront';
+import { PackFan } from '../components/PackFan';
+import { Jiggle } from '../components/Jiggle';
+import { CaddyDeckOverlay } from '../components/CaddyDeckOverlay';
 import { GOLFERS, MAX_GOLFER_RATIO } from '../data/golfers';
+import { packById, cardsInPack } from '../data/packs';
 import { useGame } from '../store/gameStore';
-import { colors, radius, spacing } from '../theme';
+import { colors, spacing } from '../theme';
+
+const CADDY_PACK = packById('caddy');
+const CADDY_CARDS = cardsInPack('caddy');
 
 export function ResultsScreen() {
   const { width, height } = useWindowDimensions();
   const players = useGame((s) => s.players);
   const avatars = useGame((s) => s.avatars);
   const pokerCardCount = useGame((s) => s.pokerCardCount);
-  const challengesWon = useGame((s) => s.challengesWon);
-  const noPokerDeck = useGame((s) => s.noPokerDeck);
-  const useVirtualPokerDeck = useGame((s) => s.useVirtualPokerDeck);
+  const ownedCaddy = useGame((s) => s.ownedPacks['caddy']);
   const includeCaddies = useGame((s) => s.includeCaddies);
   const viewScorecard = useGame((s) => s.viewScorecard);
-  const startCaddyDraw = useGame((s) => s.startCaddyDraw);
   const startPokerRound = useGame((s) => s.startPokerRound);
-  const reset = useGame((s) => s.reset);
+  const grantPack = useGame((s) => s.grantPack);
+  const setPackEnabled = useGame((s) => s.setPackEnabled);
+
+  // If the caddy pack hasn't been opened yet, surface the open-pack overlay automatically when
+  // this "Let's play poker!" screen appears. If dismissed, the corner affordance reopens it.
+  const [caddyOpen, setCaddyOpen] = useState(!ownedCaddy);
 
   const gap = spacing.lg;
   const columnWidth = (width - spacing.lg * 2 - gap) / 2;
-  // Slightly smaller so a 2×2 grid of golfers fits without scrolling.
-  const cellH = Math.min(columnWidth / MAX_GOLFER_RATIO, height * 0.16);
+  // 20% smaller than before to make room for the corner caddy affordance.
+  const cellH = Math.min(columnWidth / MAX_GOLFER_RATIO, height * 0.16) * 0.8;
 
-  const onGameOver = () => {
-    Alert.alert('Game over?', 'Return to the main menu?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Game Over', onPress: () => reset() },
-    ]);
+  const onOpenChoice = (useCaddies: boolean) => {
+    grantPack('caddy');
+    if (!useCaddies) setPackEnabled('caddy', false);
+    setCaddyOpen(false);
   };
 
-  // ---- Virtual poker mode: hand off to the in-app poker finale. ----
-  if (useVirtualPokerDeck) {
-    return (
-      <ScreenLayout
-        title="Let's play poker!"
-        scroll
-        footer={
-          <>
-            <PrimaryButton label="Play Poker" onPress={startPokerRound} />
-            <Pressable
-              onPress={() => viewScorecard('results')}
-              style={({ pressed }) => [styles.textBtn, pressed && styles.textBtnPressed]}
-            >
-              <Text style={styles.textBtnLabel}>View Scorecard</Text>
-            </Pressable>
-          </>
-        }
-      >
-        <Text style={styles.deal}>
-          Each golfer will get the following number of poker cards. Whoever makes best hand wins!
-        </Text>
-
-        <View style={[styles.golfers, { width: columnWidth * 2 + gap, gap }]}>
-          {players.map((name, i) => {
-            const g = GOLFERS[avatars[i] ?? i] ?? GOLFERS[0];
-            const count = pokerCardCount(i);
-            return (
-              <View key={i} style={[styles.golfer, { width: columnWidth }]}>
-                <Image
-                  source={g.source}
-                  resizeMode="contain"
-                  style={{ width: cellH * g.ratio, height: cellH }}
-                />
-                <Text style={styles.name} numberOfLines={1}>
-                  {name}
-                </Text>
-                <Text style={styles.count}>
-                  {count} {count === 1 ? 'card' : 'cards'}
-                </Text>
-              </View>
-            );
-          })}
-        </View>
-      </ScreenLayout>
-    );
-  }
-
-  // ---- Challenges-only mode: crown whoever won the most challenges. ----
-  if (noPokerDeck) {
-    const wins = players.map((_, i) => challengesWon(i));
-    const topWins = Math.max(0, ...wins);
-
-    return (
-      <ScreenLayout
-        title="Round complete!"
-        scroll
-        footer={<PrimaryButton label="Game Over" onPress={onGameOver} />}
-      >
-        <Text style={styles.deal}>Most challenges won</Text>
-
-        <View style={[styles.golfers, { width: columnWidth * 2 + gap, gap }]}>
-          {players.map((name, i) => {
-            const g = GOLFERS[avatars[i] ?? i] ?? GOLFERS[0];
-            const count = wins[i];
-            const isWinner = topWins > 0 && count === topWins;
-            return (
-              <View
-                key={i}
-                style={[
-                  styles.golfer,
-                  styles.championCell,
-                  { width: columnWidth },
-                  isWinner && styles.championWinner,
-                ]}
-              >
-                <Text style={styles.crown}>{isWinner ? '👑' : ' '}</Text>
-                <Image
-                  source={g.source}
-                  resizeMode="contain"
-                  style={{ width: cellH * g.ratio, height: cellH }}
-                />
-                <Text style={[styles.name, isWinner && styles.winnerText]} numberOfLines={1}>
-                  {name}
-                </Text>
-                <Text style={[styles.count, isWinner && styles.winnerText]}>
-                  {count} {count === 1 ? 'win' : 'wins'}
-                </Text>
-              </View>
-            );
-          })}
-        </View>
-      </ScreenLayout>
-    );
-  }
-
-  // ---- Default mode: poker hand finale + caddy draw. ----
   return (
     <ScreenLayout
       title="Let's play poker!"
       scroll
+      overlay={
+        <>
+          {/* Persistent bottom-right caddy affordance (box-none layer lets the body stay tappable). */}
+          {!caddyOpen ? (
+            <View style={styles.caddyCorner} pointerEvents="box-none">
+              {ownedCaddy ? (
+                <View style={styles.caddyOwned}>
+                  <PackFan
+                    name={CADDY_PACK.name}
+                    count={CADDY_CARDS.length}
+                    cards={CADDY_CARDS}
+                    width={83}
+                    showLabel={false}
+                  />
+                  <View style={styles.caddyToggleCol}>
+                    <Switch
+                      value={includeCaddies}
+                      onValueChange={(v) => setPackEnabled('caddy', v)}
+                      trackColor={{ true: colors.primary, false: 'rgba(255,255,255,0.35)' }}
+                      thumbColor={colors.white}
+                    />
+                    <Text style={styles.caddyToggleLabel}>Use caddies to improve poker hands</Text>
+                  </View>
+                </View>
+              ) : (
+                <Pressable onPress={() => setCaddyOpen(true)} style={({ pressed }) => [styles.caddyDeck, pressed && styles.pressed]}>
+                  <Jiggle>
+                    <PackFront pack={CADDY_PACK} width={50} />
+                  </Jiggle>
+                  <Text style={styles.caddyHint}>Caddy cards help improve your poker hand. Open the caddy pack.</Text>
+                </Pressable>
+              )}
+            </View>
+          ) : null}
+
+          {caddyOpen ? <CaddyDeckOverlay onOpen={onOpenChoice} onClose={() => setCaddyOpen(false)} /> : null}
+        </>
+      }
       footer={
         <>
-          <PrimaryButton label={includeCaddies ? 'Pick Caddies' : 'Play Poker'} onPress={startCaddyDraw} />
-          <PrimaryButton
-            label="No deck? Play with a virtual deck"
-            variant="secondary"
-            onPress={startPokerRound}
-          />
+          <PrimaryButton label="Play Poker" onPress={startPokerRound} />
           <Pressable
             onPress={() => viewScorecard('results')}
             style={({ pressed }) => [styles.textBtn, pressed && styles.textBtnPressed]}
@@ -149,7 +96,7 @@ export function ResultsScreen() {
       }
     >
       <Text style={styles.deal}>
-        Deal out the following number of cards to each golfer below.
+        Each golfer will be dealt the number of earned cards below, best hand wins!
       </Text>
 
       <View style={[styles.golfers, { width: columnWidth * 2 + gap, gap }]}>
@@ -158,11 +105,7 @@ export function ResultsScreen() {
           const count = pokerCardCount(i);
           return (
             <View key={i} style={[styles.golfer, { width: columnWidth }]}>
-              <Image
-                source={g.source}
-                resizeMode="contain"
-                style={{ width: cellH * g.ratio, height: cellH }}
-              />
+              <Image source={g.source} resizeMode="contain" style={{ width: cellH * g.ratio, height: cellH }} />
               <Text style={styles.name} numberOfLines={1}>
                 {name}
               </Text>
@@ -195,21 +138,20 @@ const styles = StyleSheet.create({
     marginTop: 0,
   },
   golfer: { alignItems: 'center', gap: spacing.xs, marginBottom: spacing.sm },
-  championCell: {
-    borderRadius: radius.md,
-    borderWidth: 2,
-    borderColor: 'transparent',
-    paddingVertical: spacing.sm,
-  },
-  championWinner: {
-    borderColor: colors.gold,
-    backgroundColor: 'rgba(212,175,55,0.12)',
-  },
-  crown: { fontSize: 26 },
   name: { color: colors.text, fontSize: 18, fontWeight: '800', maxWidth: '100%' },
   count: { color: colors.gold, fontSize: 20, fontWeight: '900' },
-  winnerText: { color: colors.gold },
   textBtn: { alignItems: 'center', paddingVertical: spacing.sm },
   textBtnPressed: { opacity: 0.6 },
   textBtnLabel: { color: colors.gold, fontSize: 16, fontWeight: '800' },
+
+  // Caddy affordance, floated just above the "Play Poker" footer with a little padding.
+  caddyCorner: { position: 'absolute', left: spacing.lg, right: spacing.lg, bottom: 175 },
+  // Unopened: small deck on the left, prompt text to its right.
+  caddyDeck: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  caddyHint: { flex: 1, color: colors.text, fontSize: 13, fontWeight: '700', textAlign: 'left' },
+  pressed: { opacity: 0.75 },
+  // Owned: fan on the left, the on/off toggle stacked to its right, bottom-aligned with the fan.
+  caddyOwned: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'flex-start', gap: spacing.md },
+  caddyToggleCol: { alignItems: 'center', gap: 2 },
+  caddyToggleLabel: { color: colors.text, fontSize: 13, fontWeight: '800' },
 });

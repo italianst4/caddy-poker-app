@@ -1,17 +1,22 @@
 import {
   Alert,
+  Linking,
   Pressable,
   SafeAreaView,
+  Share,
   StyleSheet,
   Switch,
   Text,
   View,
 } from 'react-native';
+import { useState } from 'react';
+import * as StoreReview from 'expo-store-review';
 import Animated, { SlideInRight } from 'react-native-reanimated';
 import { LandscapeBackground } from '../components/LandscapeBackground';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { WebViewOverlay } from '../components/WebViewOverlay';
 import { useGame } from '../store/gameStore';
-import { devExpireTrial, devResetTrial, restore, useIsUnlocked, useTrialDaysLeft } from '../entitlements';
+import { devExpireTrial, devResetTrial, useIsUnlocked, useTrialDaysLeft } from '../entitlements';
 import { devToolsEnabled } from '../buildEnv';
 import { playGolfHit } from '../sounds';
 import { track } from '../analytics';
@@ -20,44 +25,77 @@ import { colors, radius, spacing } from '../theme';
 /** Record a menu switch flip (no PII — just which toggle and its new value). */
 const toggle = (name: string, enabled: boolean) => track('menu_toggle', { toggle: name, enabled });
 
+const PRIVACY_URL = 'https://caddypoker.com/privacy-policy/';
+const TERMS_URL = 'https://caddypoker.com/terms-of-service/';
+const SHARE_URL = 'https://caddypoker.com';
+
 export function MenuScreen() {
-  const mode = useGame((s) => s.mode);
-  const setMode = useGame((s) => s.setMode);
-  const includeMatchups = useGame((s) => s.includeMatchups);
-  const setIncludeMatchups = useGame((s) => s.setIncludeMatchups);
-  const includeCaddies = useGame((s) => s.includeCaddies);
-  const setIncludeCaddies = useGame((s) => s.setIncludeCaddies);
-  const noPokerDeck = useGame((s) => s.noPokerDeck);
-  const setNoPokerDeck = useGame((s) => s.setNoPokerDeck);
-  const useVirtualPokerDeck = useGame((s) => s.useVirtualPokerDeck);
-  const setUseVirtualPokerDeck = useGame((s) => s.setUseVirtualPokerDeck);
   const showLiveActivity = useGame((s) => s.showLiveActivity);
   const setShowLiveActivity = useGame((s) => s.setShowLiveActivity);
   const goTo = useGame((s) => s.goTo);
+  const goToCardPacks = useGame((s) => s.goToCardPacks);
   const isUnlocked = useIsUnlocked();
   const daysLeft = useTrialDaysLeft();
+  const devResetPacks = useGame((s) => s.devResetPacks);
+  const devNewUserReset = useGame((s) => s.devNewUserReset);
 
-  const includeBlackTees = mode === 'pro';
+  // Which legal page (if any) is showing in the in-app WebView overlay.
+  const [webPage, setWebPage] = useState<{ url: string; title: string } | null>(null);
 
-  // Hidden dev tools: long-press the copyright to force trial expiry / reset (for testing
-  // the hard paywall without waiting out the trial). Not discoverable in normal use.
-  const onDevTools = () => {
-    Alert.alert('Dev · Trial', undefined, [
-      { text: 'Expire trial now', onPress: () => devExpireTrial() },
-      { text: 'Reset trial (full)', onPress: () => devResetTrial() },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
+  // Rate Us → the native iOS in-app rating overlay (falls back to the site if unavailable).
+  const onRate = async () => {
+    playGolfHit();
+    track('menu_link', { link: 'rate_us' });
+    try {
+      if (await StoreReview.hasAction()) {
+        await StoreReview.requestReview();
+        return;
+      }
+    } catch {
+      // fall through to the web fallback
+    }
+    Linking.openURL(SHARE_URL).catch(() => {});
   };
 
-  const onRestore = async () => {
-    const ok = await restore();
-    Alert.alert(
-      ok ? 'Purchase restored' : 'Nothing to restore',
-      ok
-        ? 'Your full game access has been restored.'
-        : 'We couldn’t find a previous purchase on this Apple ID.',
-      [{ text: 'OK' }]
-    );
+  // Invite Your Friends → the native iOS share sheet.
+  const onInvite = async () => {
+    playGolfHit();
+    track('menu_link', { link: 'invite' });
+    try {
+      await Share.share({
+        message: `Play golf and poker at the same time with Caddy Poker! ${SHARE_URL}`,
+      });
+    } catch {
+      // user dismissed / share unavailable — nothing to do
+    }
+  };
+
+  // Open a legal page (Privacy Policy / Terms of Service) in an in-app WebView overlay so the
+  // user never leaves the app.
+  const openLegal = (url: string, title: string, link: string) => {
+    playGolfHit();
+    track('menu_link', { link });
+    setWebPage({ url, title });
+  };
+
+  // Hidden dev tools: long-press the copyright to force trial expiry / reset and to replay the
+  // card-pack onboarding (for testing without a reinstall). Not discoverable in normal use.
+  const onDevTools = () => {
+    Alert.alert('Dev', undefined, [
+      { text: 'Expire trial now', onPress: () => devExpireTrial() },
+      { text: 'Reset trial (full)', onPress: () => devResetTrial() },
+      { text: 'Reset card packs (replay open)', onPress: () => devResetPacks() },
+      {
+        text: 'New user reset',
+        style: 'destructive',
+        onPress: () => {
+          devNewUserReset();
+          devResetTrial();
+          goTo('home');
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
   };
 
   return (
@@ -72,86 +110,19 @@ export function MenuScreen() {
 
         <View style={styles.body}>
           <View style={styles.toggles}>
-            <View style={styles.settingRow}>
+            <Pressable
+              onPress={() => {
+                playGolfHit();
+                goToCardPacks('menu');
+              }}
+              style={({ pressed }) => [styles.navRow, pressed && styles.pressed]}
+            >
               <View style={styles.settingText}>
-                <Text style={styles.settingLabel}>Include Black Tee Cards</Text>
-                <Text style={styles.settingNote}>Add hard challenges to the deck</Text>
+                <Text style={styles.settingLabel}>Card Packs</Text>
+                <Text style={styles.settingNote}>Open packs and choose which are in play</Text>
               </View>
-              <Switch
-                value={includeBlackTees}
-                onValueChange={(v) => {
-                  toggle('black_tees', v);
-                  setMode(v ? 'pro' : 'amateur');
-                }}
-                trackColor={{ true: colors.primary, false: 'rgba(255,255,255,0.25)' }}
-                thumbColor={colors.white}
-              />
-            </View>
-
-            <View style={styles.settingRow}>
-              <View style={styles.settingText}>
-                <Text style={styles.settingLabel}>Include Matchup Cards</Text>
-                <Text style={styles.settingNote}>Add head-to-head golfer challenges</Text>
-              </View>
-              <Switch
-                value={includeMatchups}
-                onValueChange={(v) => {
-                  toggle('matchups', v);
-                  setIncludeMatchups(v);
-                }}
-                trackColor={{ true: colors.primary, false: 'rgba(255,255,255,0.25)' }}
-                thumbColor={colors.white}
-              />
-            </View>
-
-            <View style={styles.settingRow}>
-              <View style={styles.settingText}>
-                <Text style={styles.settingLabel}>Include Caddy Cards</Text>
-                <Text style={styles.settingNote}>Draw caddy cards for the poker finale</Text>
-              </View>
-              <Switch
-                value={includeCaddies}
-                onValueChange={(v) => {
-                  toggle('caddies', v);
-                  setIncludeCaddies(v);
-                }}
-                trackColor={{ true: colors.primary, false: 'rgba(255,255,255,0.25)' }}
-                thumbColor={colors.white}
-              />
-            </View>
-
-            <View style={styles.settingRow}>
-              <View style={styles.settingText}>
-                <Text style={styles.settingLabel}>Challenges Only</Text>
-                <Text style={styles.settingNote}>Play challenges only, no poker hand finale</Text>
-              </View>
-              <Switch
-                value={noPokerDeck}
-                onValueChange={(v) => {
-                  toggle('challenges_only', v);
-                  setNoPokerDeck(v);
-                }}
-                trackColor={{ true: colors.primary, false: 'rgba(255,255,255,0.25)' }}
-                thumbColor={colors.white}
-              />
-            </View>
-
-            <View style={[styles.settingRow, noPokerDeck && styles.settingDisabled]}>
-              <View style={styles.settingText}>
-                <Text style={styles.settingLabel}>Use Virtual Poker Deck</Text>
-                <Text style={styles.settingNote}>Play poker with a virtual deck</Text>
-              </View>
-              <Switch
-                value={useVirtualPokerDeck}
-                onValueChange={(v) => {
-                  toggle('virtual_deck', v);
-                  setUseVirtualPokerDeck(v);
-                }}
-                disabled={noPokerDeck}
-                trackColor={{ true: colors.primary, false: 'rgba(255,255,255,0.25)' }}
-                thumbColor={colors.white}
-              />
-            </View>
+              <Text style={styles.navChevron}>›</Text>
+            </Pressable>
 
             <View style={styles.settingRow}>
               <View style={styles.settingText}>
@@ -168,6 +139,44 @@ export function MenuScreen() {
                 thumbColor={colors.white}
               />
             </View>
+
+            <Pressable onPress={onRate} style={({ pressed }) => [styles.navRow, pressed && styles.pressed]}>
+              <View style={styles.settingText}>
+                <Text style={styles.settingLabel}>Rate Us</Text>
+                <Text style={styles.settingNote}>Enjoying the app? Leave a rating</Text>
+              </View>
+              <Text style={styles.navChevron}>›</Text>
+            </Pressable>
+
+            <Pressable onPress={onInvite} style={({ pressed }) => [styles.navRow, pressed && styles.pressed]}>
+              <View style={styles.settingText}>
+                <Text style={styles.settingLabel}>Invite Your Friends</Text>
+                <Text style={styles.settingNote}>Share Caddy Poker with your group</Text>
+              </View>
+              <Text style={styles.navChevron}>›</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => openLegal(PRIVACY_URL, 'Privacy Policy', 'privacy')}
+              style={({ pressed }) => [styles.navRow, pressed && styles.pressed]}
+            >
+              <View style={styles.settingText}>
+                <Text style={styles.settingLabel}>Privacy Policy</Text>
+                <Text style={styles.settingNote}>How we handle your data</Text>
+              </View>
+              <Text style={styles.navChevron}>›</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => openLegal(TERMS_URL, 'Terms of Service', 'terms')}
+              style={({ pressed }) => [styles.navRow, pressed && styles.pressed]}
+            >
+              <View style={styles.settingText}>
+                <Text style={styles.settingLabel}>Terms of Service</Text>
+                <Text style={styles.settingNote}>The rules for using the app</Text>
+              </View>
+              <Text style={styles.navChevron}>›</Text>
+            </Pressable>
           </View>
 
           {!isUnlocked && (
@@ -202,13 +211,6 @@ export function MenuScreen() {
           >
             <Text style={styles.restoreText}>How To Play</Text>
           </Pressable>
-
-          <Pressable
-            onPress={onRestore}
-            style={({ pressed }) => [styles.restoreBtn, pressed && styles.pressed]}
-          >
-            <Text style={styles.restoreText}>Restore Purchase</Text>
-          </Pressable>
         </View>
 
         {devToolsEnabled ? (
@@ -220,6 +222,10 @@ export function MenuScreen() {
         )}
         </SafeAreaView>
       </Animated.View>
+
+      {webPage ? (
+        <WebViewOverlay url={webPage.url} title={webPage.title} onClose={() => setWebPage(null)} />
+      ) : null}
     </View>
   );
 }
@@ -228,7 +234,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
   safe: { flex: 1, paddingHorizontal: spacing.lg },
-  body: { flex: 1, gap: spacing.lg, paddingTop: spacing.lg },
+  body: { flex: 1, gap: spacing.lg, paddingTop: spacing.xs },
   // Toggles grouped with one consistent, tight gap between each row.
   toggles: { gap: spacing.sm },
   settingRow: {
@@ -240,6 +246,16 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.lg,
   },
   settingDisabled: { opacity: 0.4 },
+  settingBlock: { gap: spacing.sm, paddingVertical: spacing.xs, marginHorizontal: spacing.lg },
+  navRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    paddingVertical: spacing.sm,
+    marginHorizontal: spacing.lg,
+  },
+  navChevron: { color: colors.gold, fontSize: 28, fontWeight: '900' },
   settingText: { flexShrink: 1, gap: 2 },
   settingLabel: { color: colors.text, fontSize: 17, fontWeight: '800' },
   settingNote: { color: colors.black, fontSize: 13, fontWeight: '500' },

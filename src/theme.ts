@@ -15,6 +15,7 @@ export const colors = {
   gold: '#FFD66B',
   whiteTee: '#E9EEF0',
   blackTee: '#222831',
+  sky: '#42A7DE', // flat sky blue sampled from the landscape art
 } as const;
 
 export const spacing = {

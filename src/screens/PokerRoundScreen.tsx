@@ -1,6 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import {
-  Alert,
   Image,
   Pressable,
   SafeAreaView,
@@ -16,7 +15,7 @@ import { PrimaryButton } from '../components/PrimaryButton';
 import { CardBack } from '../components/CardBack';
 import { CardArt } from '../components/CardArt';
 import { FlipCard } from '../components/FlipCard';
-import { Celebration } from '../components/Celebration';
+import { WinnerReveal, type RevealPlayer } from '../components/WinnerReveal';
 import { PokerCardView } from '../components/PokerCardView';
 import { RectSparkles } from '../components/Sparkles';
 import { HandRankGuide } from '../components/HandRankGuide';
@@ -55,8 +54,6 @@ export function PokerRoundScreen() {
   const pokerPhase = useGame((s) => s.pokerPhase);
 
   switch (pokerPhase) {
-    case 'intro':
-      return <IntroPhase />;
     case 'ready':
       return <ReadyPhase />;
     case 'caddy':
@@ -69,60 +66,38 @@ export function PokerRoundScreen() {
     case 'reveal':
       return <RevealPhase />;
     default:
-      return <IntroPhase />;
+      return <ReadyPhase />;
   }
-}
-
-/* ------------------------------------------------------------------ */
-/* Intro — how it works                                               */
-/* ------------------------------------------------------------------ */
-function IntroPhase() {
-  const beginPokerReady = useGame((s) => s.beginPokerReady);
-  const includeCaddies = useGame((s) => s.includeCaddies);
-  const steps = [
-    'You’ll pass the phone to the player as instructed.',
-    ...(includeCaddies
-      ? ['The player will pick a Caddy Card. Caddy Cards help you improve your poker hand.']
-      : []),
-    'The player will be dealt the number of poker cards they earned.',
-    'The player will lock in their poker hand.',
-  ];
-  return (
-    <ScreenLayout
-      title="How this works"
-      scroll
-      footer={<PrimaryButton label="Start" onPress={beginPokerReady} />}
-    >
-      {steps.map((text, i) => (
-        <View key={i} style={styles.step}>
-          <View style={styles.stepNum}>
-            <Text style={styles.stepNumText}>{i + 1}</Text>
-          </View>
-          <Text style={styles.stepText}>{text}</Text>
-        </View>
-      ))}
-      <Text style={styles.finale}>
-        Once everyone has locked in their hand, we'll reveal the winner! 🃏
-      </Text>
-    </ScreenLayout>
-  );
 }
 
 /* ------------------------------------------------------------------ */
 /* Ready — "Are you ready NAME?"                                      */
 /* ------------------------------------------------------------------ */
 function ReadyPhase() {
+  const { width, height } = useWindowDimensions();
   const players = useGame((s) => s.players);
+  const avatars = useGame((s) => s.avatars);
   const pokerTurn = useGame((s) => s.pokerTurn);
   const pokerReady = useGame((s) => s.pokerReady);
   const name = players[pokerTurn] ?? '';
+  const g = GOLFERS[avatars[pokerTurn] ?? pokerTurn] ?? GOLFERS[0];
+
+  // 2× the Add-Golfers image size (that view uses a 2-column grid cellH), capped to fit.
+  const columnWidth = (width - spacing.lg * 2 - spacing.md) / 2;
+  const baseH = Math.min(columnWidth / MAX_GOLFER_RATIO, height * 0.26);
+  const imgH = Math.min(baseH * 2, height * 0.42);
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.centered}>
-        <Text style={styles.passNote}>Pass the phone to</Text>
-        <Text style={styles.readyName}>{name}</Text>
-        <Text style={styles.readyPrompt}>Are you ready, {name}?</Text>
+      <View style={styles.readyContent}>
+        <Image
+          source={g.source}
+          resizeMode="contain"
+          style={{ width: imgH * g.ratio, height: imgH, marginBottom: spacing.lg, alignSelf: 'flex-start' }}
+        />
+        <Text style={[styles.passNote, styles.leftText]}>Pass the phone to</Text>
+        <Text style={[styles.readyName, styles.leftText]}>{name}</Text>
+        <Text style={[styles.readyPrompt, styles.leftText]}>Are you ready, {name}?</Text>
       </View>
       <View style={styles.footer}>
         <PrimaryButton label="Yes, I'm ready" onPress={pokerReady} />
@@ -446,9 +421,7 @@ function RevealPhase() {
   const pokerHands = useGame((s) => s.pokerHands);
   const pokerSelection = useGame((s) => s.pokerSelection);
   const pokerCardCount = useGame((s) => s.pokerCardCount);
-  const reset = useGame((s) => s.reset);
 
-  const [showConfetti, setShowConfetti] = useState(true);
   const [zoomCaddyId, setZoomCaddyId] = useState<string | null>(null);
 
   // Crowd cheer on the winner reveal.
@@ -499,103 +472,66 @@ function RevealPhase() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const onGameOver = () => {
-    Alert.alert('Game over?', 'Return to the main menu?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Game Over', onPress: () => reset() },
-    ]);
-  };
-
-  const winnerCardW = Math.min(width / 6.5, 70);
-  const winCellH = Math.min(width * 0.26, 130);
-  const loseCellH = Math.min(width * 0.14, 74);
+  const winnerCardW = Math.min(width / 9, 52);
   const zoomW = Math.min(width * 0.78, height * 0.6 * CARD_RATIO);
   const zoomCaddy = zoomCaddyId ? caddyById(zoomCaddyId) : undefined;
 
+  const asRevealPlayer = (idx: number): RevealPlayer => ({
+    playerIdx: idx,
+    avatar: avatars[idx] ?? idx,
+    name: players[idx],
+  });
+
+  // The mode-specific winner detail: the played hand, its name, and the caddy card if it helped.
+  const renderHand = (p: RevealPlayer) => {
+    const idx = p.playerIdx;
+    const cards = selectedCardsFor(idx);
+    const effect = caddyEffect(caddyCards[pokerCaddyAssignment[idx]]);
+    // The caddy card is "in use" if it made a card wild or improved the hand's rank.
+    const caddyUsed =
+      cards.some((c) => isWildCard(c, effect)) ||
+      evaluateHand(cards, { kind: 'none' }).cat < results[idx].cat;
+    const caddyCard = caddyById(caddyCards[pokerCaddyAssignment[idx]]);
+    return (
+      <>
+        <Text style={styles.handName}>{results[idx].name}</Text>
+        <View style={styles.handRow}>
+          {cards.map((card) => (
+            <PokerCardView
+              key={card.id}
+              card={card}
+              width={winnerCardW}
+              wild={isWildCard(card, effect)}
+              style={{ marginHorizontal: 2 }}
+            />
+          ))}
+          {/* The winner's caddy card sits inline with the played cards; tap to zoom. */}
+          {caddyUsed && caddyCard ? (
+            <Pressable
+              onPress={() => setZoomCaddyId(caddyCard.id)}
+              style={({ pressed }) => [styles.winnerCaddy, pressed && styles.pressed]}
+            >
+              <CardArt card={caddyCard} style={{ width: winnerCardW, borderRadius: 4 }} />
+            </Pressable>
+          ) : null}
+        </View>
+      </>
+    );
+  };
+
   return (
     <View style={styles.flex}>
-      <ScreenLayout
-        scroll
-        footer={<PrimaryButton label="Game Over" onPress={onGameOver} />}
-      >
-        <Text style={styles.revealTitle}>{winners.size > 1 ? "It's a tie!" : 'Winner!'}</Text>
-        {[...winners].map((idx) => {
-          const g = GOLFERS[avatars[idx] ?? idx] ?? GOLFERS[0];
-          const cards = selectedCardsFor(idx);
-          const effect = caddyEffect(caddyCards[pokerCaddyAssignment[idx]]);
-          // The caddy card is "in use" if it made a card wild or improved the hand's rank.
-          const caddyUsed =
-            cards.some((c) => isWildCard(c, effect)) ||
-            evaluateHand(cards, { kind: 'none' }).cat < results[idx].cat;
-          const caddyCard = caddyById(caddyCards[pokerCaddyAssignment[idx]]);
-          return (
-            <View key={idx} style={styles.winnerBlock}>
-              <Text style={styles.crown}>👑</Text>
-              <Image
-                source={g.source}
-                resizeMode="contain"
-                style={{ width: winCellH * g.ratio, height: winCellH }}
-              />
-              <Text style={styles.winnerName}>{players[idx]}</Text>
-              <Text style={styles.handName}>{results[idx].name}</Text>
-              <View style={styles.handRow}>
-                {cards.map((card) => (
-                  <PokerCardView
-                    key={card.id}
-                    card={card}
-                    width={winnerCardW}
-                    wild={isWildCard(card, effect)}
-                    style={{ marginHorizontal: 2 }}
-                  />
-                ))}
-                {/* The winner's caddy card sits inline with the played cards; tap to zoom. */}
-                {caddyUsed && caddyCard ? (
-                  <Pressable
-                    onPress={() => setZoomCaddyId(caddyCard.id)}
-                    style={({ pressed }) => [styles.winnerCaddy, pressed && styles.pressed]}
-                  >
-                    <CardArt card={caddyCard} style={{ width: winnerCardW, borderRadius: 4 }} />
-                  </Pressable>
-                ) : null}
-              </View>
-            </View>
-          );
-        })}
-
-        {losers.length > 0 ? (
-          <>
-            <Text style={styles.othersLabel}>Other hands</Text>
-            <View style={styles.losers}>
-              {losers.map((idx) => {
-                const g = GOLFERS[avatars[idx] ?? idx] ?? GOLFERS[0];
-                return (
-                  <View key={idx} style={styles.loserCell}>
-                    <Image
-                      source={g.source}
-                      resizeMode="contain"
-                      style={{ width: loseCellH * g.ratio, height: loseCellH }}
-                    />
-                    <Text style={styles.loserName} numberOfLines={1}>
-                      {players[idx]}
-                    </Text>
-                    <Text style={styles.loserHand} numberOfLines={1}>
-                      {results[idx].name}
-                    </Text>
-                  </View>
-                );
-              })}
-            </View>
-          </>
-        ) : null}
-      </ScreenLayout>
-
-      {showConfetti ? (
-        <Celebration
-          message={winners.size > 1 ? "It's a tie!" : `${players[[...winners][0]]} wins!`}
-          durationMs={10000}
-          onDone={() => setShowConfetti(false)}
-        />
-      ) : null}
+      <WinnerReveal
+        winners={[...winners].map(asRevealPlayer)}
+        losers={losers.map(asRevealPlayer)}
+        losersLabel="Other hands"
+        renderWinnerDetail={renderHand}
+        renderLoserDetail={(p) => (
+          <Text style={styles.loserHand} numberOfLines={1}>
+            {results[p.playerIdx].name}
+          </Text>
+        )}
+      />
 
       {zoomCaddy ? (
         <Pressable style={styles.zoomOverlay} onPress={() => setZoomCaddyId(null)}>
@@ -629,31 +565,46 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     marginBottom: spacing.md,
   },
-  step: {
+  dealGrid: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.md,
-    marginTop: spacing.md,
-  },
-  stepNum: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: colors.gold,
-    alignItems: 'center',
+    flexWrap: 'wrap',
     justifyContent: 'center',
+    alignSelf: 'center',
+    paddingTop: spacing.lg,
   },
-  stepNumText: { color: colors.primaryText, fontSize: 16, fontWeight: '900' },
-  stepText: { flex: 1, color: colors.text, fontSize: 17, fontWeight: '600', lineHeight: 24, paddingTop: 3 },
-  finale: {
-    color: colors.gold,
-    fontSize: 24,
+  dealCell: { alignItems: 'center', gap: spacing.xs, marginBottom: spacing.lg },
+  dealName: {
+    color: colors.text,
+    fontSize: 16,
     fontWeight: '800',
-    lineHeight: 32,
+    maxWidth: '100%',
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  dealBtn: {
+    marginTop: spacing.xs,
+    minWidth: 96,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.md,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+  },
+  dealBtnDone: { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: colors.primary },
+  dealBtnDisabled: { opacity: 0.4 },
+  dealBtnText: { color: colors.primaryText, fontSize: 16, fontWeight: '900' },
+  dealBtnTextDone: { color: colors.primary },
+  dealFootMsg: {
+    color: colors.gold,
+    fontSize: 22,
+    fontWeight: '800',
+    lineHeight: 28,
     textAlign: 'center',
-    marginTop: spacing.xl * 2,
   },
 
+  readyContent: { flex: 1, justifyContent: 'center', paddingHorizontal: spacing.lg },
+  leftText: { textAlign: 'left', alignSelf: 'stretch' },
   passNote: { color: colors.textMuted, fontSize: 16, fontWeight: '600' },
   readyName: { color: colors.gold, fontSize: 34, fontWeight: '900', textAlign: 'center', marginTop: spacing.xs },
   readyPrompt: { color: colors.text, fontSize: 22, fontWeight: '700', marginTop: spacing.lg, textAlign: 'center' },
@@ -784,33 +735,10 @@ const styles = StyleSheet.create({
   offerSub: { color: colors.text, fontSize: 17, marginTop: spacing.xs, marginBottom: spacing.xl },
   offerRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
 
-  revealTitle: {
-    color: colors.text,
-    fontSize: 40,
-    fontWeight: '900',
-    textAlign: 'center',
-    letterSpacing: 0.3,
-    marginTop: spacing.sm,
-    marginBottom: spacing.xs,
-  },
-  winnerBlock: { alignItems: 'center', marginTop: spacing.md },
-  crown: { fontSize: 30 },
-  winnerName: { color: colors.gold, fontSize: 26, fontWeight: '900', marginTop: spacing.xs },
+  // Winner-reveal detail (rendered inside the shared WinnerReveal).
   winnerCaddy: { marginHorizontal: 2 },
   pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
-  handName: { color: colors.text, fontSize: 20, fontWeight: '800', marginBottom: spacing.md },
+  handName: { color: colors.text, fontSize: 18, fontWeight: '800', marginBottom: spacing.xs },
   handRow: { flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', gap: 2 },
-  othersLabel: {
-    color: colors.textMuted,
-    fontSize: 14,
-    fontWeight: '800',
-    letterSpacing: 2,
-    textAlign: 'center',
-    marginTop: spacing.xl,
-    marginBottom: spacing.md,
-  },
-  losers: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: spacing.lg },
-  loserCell: { alignItems: 'center', maxWidth: 100 },
-  loserName: { color: colors.text, fontSize: 14, fontWeight: '800', maxWidth: '100%' },
   loserHand: { color: colors.textMuted, fontSize: 12, fontWeight: '600', maxWidth: '100%' },
 });

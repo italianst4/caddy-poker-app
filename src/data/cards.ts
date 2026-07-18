@@ -1,4 +1,7 @@
 import type { ImageSourcePropType } from 'react-native';
+// Type-only import — erased at compile, so this does not create a runtime cycle with packs.ts
+// (which imports CARDS from here).
+import type { PackId } from './packs';
 
 export type CardType = 'white' | 'black' | 'matchup' | 'caddy';
 export type GameMode = 'amateur' | 'pro';
@@ -60,18 +63,27 @@ export const isMatchup = (c: Card): boolean => c.type === 'matchup';
  *   - 1 copy of each black card (pro mode only)
  *   - 1 copy of each matchup card (both modes)
  *
+ * A card only enters the pool if the player OWNS its pack — ownership is the source of truth for
+ * availability, while `mode`/`includeMatchups` are the in-play toggles layered on top. So an
+ * unowned pack contributes nothing even if its toggle is on.
+ *
  * Duplicates are real array slots, so two players can draw the same white challenge in a
  * hole. `drawDistinct` selects distinct slots, which preserves that behaviour.
  */
-export function buildDrawPool(mode: GameMode, includeMatchups = true): Card[] {
+export function buildDrawPool(
+  mode: GameMode,
+  includeMatchups: boolean,
+  ownedPacks: Record<PackId, boolean>,
+  includeWhite = true
+): Card[] {
   const pool: Card[] = [];
   for (const card of CARDS) {
     if (card.type === 'white') {
-      pool.push(card, card); // 2 copies
+      if (includeWhite && ownedPacks['white-tees']) pool.push(card, card); // 2 copies
     } else if (card.type === 'matchup') {
-      if (includeMatchups) pool.push(card); // 1 copy, both modes (unless disabled)
-    } else if (card.type === 'black' && mode === 'pro') {
-      pool.push(card); // 1 copy, pro only
+      if (includeMatchups && ownedPacks['matchups']) pool.push(card); // 1 copy, both modes
+    } else if (card.type === 'black') {
+      if (mode === 'pro' && ownedPacks['black-tees']) pool.push(card); // 1 copy, pro only
     }
   }
   return pool;
