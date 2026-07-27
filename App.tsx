@@ -10,6 +10,7 @@ import { colors } from './src/theme';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { MenuScreen } from './src/screens/MenuScreen';
 import { CardPacksScreen } from './src/screens/CardPacksScreen';
+import { GameHistoryScreen } from './src/screens/GameHistoryScreen';
 import { OpenPackScreen } from './src/screens/OpenPackScreen';
 import { HowToPlayScreen } from './src/screens/HowToPlayScreen';
 import { PaywallScreen } from './src/screens/PaywallScreen';
@@ -42,7 +43,7 @@ export default function App() {
 
   // A backgrounded round could resume past the gate after the trial expired — if access has
   // lapsed and we're on a gameplay step, force the paywall.
-  const UNGATED: Step[] = ['home', 'menu', 'howToPlay', 'paywall', 'packs', 'openPack'];
+  const UNGATED: Step[] = ['home', 'menu', 'howToPlay', 'paywall', 'packs', 'openPack', 'history'];
   const GATED = !UNGATED.includes(step);
   const routeKey: Step = !hasAccess && GATED ? 'paywall' : step;
 
@@ -79,6 +80,8 @@ function renderStep(step: Step) {
       return <MenuScreen />;
     case 'packs':
       return <CardPacksScreen />;
+    case 'history':
+      return <GameHistoryScreen />;
     case 'openPack':
       return <OpenPackScreen />;
     case 'howToPlay':

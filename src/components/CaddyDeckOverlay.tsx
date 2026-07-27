@@ -18,13 +18,11 @@ import { PackCardViewer } from './PackCardViewer';
 import { ConfettiBurst } from './ConfettiBurst';
 import { packById, cardsInPack } from '../data/packs';
 import { playGolfHit } from '../sounds';
-import { bigPop, shutter, rumble } from '../haptics';
+import { bigPop, rumble } from '../haptics';
 import { colors, radius, spacing } from '../theme';
 
-// Opening the caddy pack is a 3-tap ritual (mirrors OpenPackScreen): taps 1–2 give a "shutter"
-// snap + jiggle; the 3rd tap flips it open with a continuous rumble that lasts until every caddy
-// card is on screen. The reveal timing below matches the grid's FadeInDown (delay i*45, dur 320).
-const OPEN_TAPS = 3;
+// One tap flips the caddy pack open with a continuous rumble that lasts until every caddy card is
+// on screen. The reveal timing below matches the grid's FadeInDown (delay i*45, dur 320).
 const FLIP_MS = 520;
 const CARD_STAGGER_MS = 45;
 const CARD_ANIM_MS = 320;
@@ -53,8 +51,8 @@ export function CaddyDeckOverlay({ onOpen, onClose }: Props) {
   // One-shot shake applied on each tap (composited with the ambient wiggle).
   const shake = useSharedValue(0);
 
-  // How many times the sealed pack has been tapped, and a handle to stop the open rumble.
-  const taps = useRef(0);
+  // True once the open flip has started, and a handle to stop the open rumble.
+  const opening = useRef(false);
   const stopRumble = useRef<null | (() => void)>(null);
   useEffect(() => () => stopRumble.current?.(), []);
 
@@ -92,21 +90,10 @@ export function CaddyDeckOverlay({ onOpen, onClose }: Props) {
   };
 
   const open = () => {
-    // Ignore taps once the flip has been triggered (revealed only flips true after the flip
-    // completes ~FLIP_MS later, so guard on the tap count too — otherwise a tap during the flip
-    // starts a second rumble and orphans the first one's timers).
-    if (revealed || taps.current >= OPEN_TAPS) return;
-    jigglePack(); // every tap gives the pack a jiggle
-
-    taps.current += 1;
-
-    // Taps 1–2: a crisp "shutter" snap; wait for more taps.
-    if (taps.current < OPEN_TAPS) {
-      shutter();
-      return;
-    }
-
-    // Third tap: flip open with a continuous rumble that runs until every caddy card is revealed.
+    if (revealed || opening.current) return;
+    opening.current = true; // guard against a second tap during the flip
+    // One tap flips the pack open with a continuous rumble that runs until every caddy is revealed.
+    jigglePack();
     playGolfHit();
     wiggle.value = withTiming(0, { duration: 100 }); // stop the ambient entice wiggle
     const revealMs = FLIP_MS + (cards.length - 1) * CARD_STAGGER_MS + CARD_ANIM_MS;

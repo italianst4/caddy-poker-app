@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { buildDrawPool, drawDistinct, cardById, type GameMode } from '../data/cards';
 import { NO_PACKS_OWNED, ALL_PACKS_OWNED, type PackId } from '../data/packs';
 import { drawCaddies, caddyEffect, caddyById } from '../data/caddyCards';
-import { buildDeck, shuffle, type PokerCard } from '../data/pokerDeck';
+import { buildDeck, shuffle, evaluateHand, pickWinners, type PokerCard } from '../data/pokerDeck';
 import { track, startGame, registerConfig } from '../analytics';
 
 export type Step =
@@ -22,7 +22,8 @@ export type Step =
   | 'results'
   | 'poker'
   | 'openPack' // the pack-opening reveal (onboarding first pack, or opening a pack from Card Packs)
-  | 'packs'; // the Card Packs management view
+  | 'packs' // the Card Packs management view
+  | 'history'; // past-games history
 
 export type Phase = 'pick' | 'transition' | 'score' | 'matchup';
 export type Result = 'achieved' | 'failed';
@@ -37,6 +38,24 @@ export const MATCHUP_REWARD = 2;
 export const MAX_POKER_CARDS = 18;
 
 type MatchupState = { cardId: string; winner: number | null };
+
+/** One player's line in a saved game record. */
+export type GameHistoryPlayer = {
+  name: string;
+  avatar: number; // index into GOLFERS
+  cards: number; // poker cards earned this game
+  hand?: string; // ranked hand name (undefined for players dealt no cards)
+  isWinner: boolean;
+};
+
+/** A finished game, saved to on-device history (newest first). */
+export type GameRecord = {
+  id: string; // `g-${playedAt}`
+  playedAt: number; // epoch ms
+  holes: 9 | 18;
+  tie: boolean; // more than one winner
+  players: GameHistoryPlayer[]; // ALL players, in add order
+};
 
 type GameState = {
   // ---- navigation ----
@@ -104,6 +123,9 @@ type GameState = {
   pokerHands: Record<number, PokerCard[]>; // playerIdx -> dealt cards
   pokerSelection: Record<number, string[]>; // playerIdx -> chosen card ids (≤5)
   pokerMulliganOffer: Record<number, PokerCard[]>; // playerIdx -> extra cards to keep 1 of (Mulligan Draw)
+
+  // ---- game history (persistent, on-device; newest first) ----
+  history: GameRecord[];
 
   // ---- navigation actions ----
   goTo: (step: Step, transition?: 'push' | 'pop') => void;
@@ -263,6 +285,8 @@ export const useGame = create<GameState>()(
       pokerSelection: {},
       pokerMulliganOffer: {},
 
+      history: [],
+
       goTo: (step, transition) => set({ step, transition: transition ?? null }),
 
       viewScorecard: (from) => set({ scorecardReturn: from, step: 'scorecard', transition: 'push' }),
@@ -376,6 +400,7 @@ export const useGame = create<GameState>()(
           pokerHands: {},
           pokerSelection: {},
           pokerMulliganOffer: {},
+          history: [],
         }),
 
       startRound: () =>
@@ -540,7 +565,38 @@ export const useGame = create<GameState>()(
             : { pokerPhase: 'allIn' as PokerPhase };
         }),
 
-      revealPoker: () => set({ pokerPhase: 'reveal' }),
+      revealPoker: () =>
+        set((s) => {
+          // Mirror RevealPhase: evaluate each dealt player's chosen cards, pick the winner(s),
+          // and record the finished game to on-device history (fires once, on "Reveal Winner").
+          const participants = s.players.map((_, i) => i).filter((i) => get().pokerCardCount(i) > 0);
+          const cardsFor = (idx: number) =>
+            (s.pokerSelection[idx] ?? [])
+              .map((id) => (s.pokerHands[idx] ?? []).find((c) => c.id === id))
+              .filter((c): c is PokerCard => !!c);
+          const results: Record<number, ReturnType<typeof evaluateHand>> = {};
+          for (const idx of participants) {
+            results[idx] = evaluateHand(cardsFor(idx), caddyEffect(s.caddyCards[s.pokerCaddyAssignment[idx]]));
+          }
+          const winners = new Set(
+            pickWinners(participants.map((i) => results[i])).map((li) => participants[li])
+          );
+          const playedAt = Date.now();
+          const record: GameRecord = {
+            id: `g-${playedAt}`,
+            playedAt,
+            holes: s.holes,
+            tie: winners.size > 1,
+            players: s.players.map((name, i) => ({
+              name,
+              avatar: s.avatars[i] ?? i,
+              cards: get().pokerCardCount(i),
+              hand: results[i]?.name,
+              isWinner: winners.has(i),
+            })),
+          };
+          return { pokerPhase: 'reveal', history: [record, ...s.history] };
+        }),
 
       // Replace the card at `position` with a fresh random draw (different from the current).
       redrawCard: (position) =>
@@ -712,11 +768,12 @@ export const useGame = create<GameState>()(
       name: 'caddy-game',
       // Bump when the persisted round shape changes. `migrate` below preserves player settings
       // across bumps (only the in-progress round is allowed to be dropped).
-      version: 8,
+      version: 9,
       // v6: card packs. Existing users are granted ALL packs so they're never forced through
       //     onboarding and keep their pro/matchup settings; fresh installs own nothing.
       // v8: game simplified to virtual-only (game-mode picker removed); caddies became a pack.
       //     Grant the caddy pack to existing users so their caddies keep working.
+      // v9: on-device game history added; default existing users to an empty list.
       migrate: (persisted: any, version) => {
         let p = persisted;
         if (p && version < 5) {
@@ -732,6 +789,9 @@ export const useGame = create<GameState>()(
             useVirtualPokerDeck: true,
             noPokerDeck: false,
           };
+        }
+        if (p && version < 9) {
+          p = { ...p, history: p.history ?? [] };
         }
         return p;
       },
@@ -770,6 +830,7 @@ export const useGame = create<GameState>()(
         pokerHands: s.pokerHands,
         pokerSelection: s.pokerSelection,
         pokerMulliganOffer: s.pokerMulliganOffer,
+        history: s.history,
       }),
     }
   )

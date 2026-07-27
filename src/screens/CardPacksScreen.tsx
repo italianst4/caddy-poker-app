@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Switch, Text, useWindowDimensions, View } from 'react-native';
 import Animated, { SlideInDown, SlideOutDown } from 'react-native-reanimated';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { CloudLayer } from '../components/CloudLayer';
 import { PackFront, PACK_RATIO } from '../components/PackFront';
 import { PackFan } from '../components/PackFan';
 import { Jiggle } from '../components/Jiggle';
@@ -124,6 +125,8 @@ export function CardPacksScreen() {
 
   return (
     <View style={styles.root}>
+      {/* Two clouds drifting slowly across the sky-blue background. */}
+      <CloudLayer />
       <View style={styles.flex}>
         <SafeAreaView style={styles.safe}>
           <ScreenHeader title="Card Packs" onBack={() => goTo(packsReturn, 'pop')} />

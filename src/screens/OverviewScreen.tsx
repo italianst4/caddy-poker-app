@@ -117,17 +117,14 @@ export function OverviewScreen() {
         </View>
       </View>
 
-      {/* Start + hole count, pinned just below the navy horizon (in the grass). */}
+      {/* Start button (with the hole count), pinned just below the navy horizon (in the grass). */}
       <View style={[styles.footer, { top: horizonY + spacing.md }]}>
         <Pressable
           onPress={onStart}
           style={({ pressed }) => [styles.startBtn, pressed && styles.startPressed]}
         >
           <Text style={styles.startText}>Start Round</Text>
-        </Pressable>
-        {/* Hole count below the button — plain emoji + dark green text; tap to change it. */}
-        <Pressable onPress={() => goTo('holes')} hitSlop={10} style={({ pressed }) => pressed && styles.pressed}>
-          <Text style={styles.holesText}>⛳ {holes} Holes</Text>
+          <Text style={styles.startSub}>{holes} Holes</Text>
         </Pressable>
       </View>
 
@@ -202,12 +199,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
   },
-  holesText: {
-    color: '#0B3D2E', // dark green
-    fontSize: 18,
-    fontWeight: '900',
-    letterSpacing: 0.3,
-  },
   startBtn: {
     width: '90%',
     backgroundColor: colors.gold,
@@ -222,5 +213,14 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: '900',
     letterSpacing: 0.5,
+  },
+  // Hole count as a subtitle inside the button.
+  startSub: {
+    color: colors.primaryText,
+    fontSize: 15,
+    fontWeight: '800',
+    opacity: 0.8,
+    marginTop: 2,
+    letterSpacing: 0.3,
   },
 });

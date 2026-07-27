@@ -124,6 +124,21 @@ export function MenuScreen() {
               <Text style={styles.navChevron}>›</Text>
             </Pressable>
 
+            <Pressable
+              onPress={() => {
+                playGolfHit();
+                track('menu_link', { link: 'history' });
+                goTo('history', 'push');
+              }}
+              style={({ pressed }) => [styles.navRow, pressed && styles.pressed]}
+            >
+              <View style={styles.settingText}>
+                <Text style={styles.settingLabel}>Game History</Text>
+                <Text style={styles.settingNote}>Past games, hands, and winners</Text>
+              </View>
+              <Text style={styles.navChevron}>›</Text>
+            </Pressable>
+
             <View style={styles.settingRow}>
               <View style={styles.settingText}>
                 <Text style={styles.settingLabel}>Show Live Activity</Text>
