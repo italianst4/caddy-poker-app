@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, SafeAreaView, ScrollView, StyleSheet, Switch, Text, useWindowDimensions, View } from 'react-native';
+import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, { SlideInDown, SlideOutDown } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { CloudLayer } from '../components/CloudLayer';
-import { PackFront, PACK_RATIO } from '../components/PackFront';
+import { PackFront } from '../components/PackFront';
 import { PackFan } from '../components/PackFan';
 import { Jiggle } from '../components/Jiggle';
 import { useGame } from '../store/gameStore';
@@ -61,54 +61,46 @@ export function CardPacksScreen() {
     const owned = ownedPacks[id];
     const enabled = isEnabled(id);
     const isLastActive = lockLastActive && enabled && activeChallenge === 1;
-    // Fan cards to 90% of the unopened pack's height (PackFront is drawn at 80% of the cell width).
-    const unopenedPackH = Math.round(w * 0.8) / PACK_RATIO;
-    return (
-      <>
-        {owned ? (
+    if (owned) {
+      return (
+        <View style={styles.packWrap}>
           <Pressable onPress={() => beginBrowsePack(id)} style={({ pressed }) => pressed && styles.pressed}>
             <PackFan
               name={gridName}
               count={cardsInPack(id).length}
               cards={cardsInPack(id)}
-              width={w}
-              cardHeight={unopenedPackH * 0.9}
+              width={Math.round(w * 0.8)}
               ripped={pack.ripped}
               ink={PACK_THEME[id].ink}
             />
           </Pressable>
-        ) : (
-          // Unopened decks are shown 20% smaller and jiggle on their own random schedule.
-          // Tapping the deck opens it (see the "Tap any deck to open" hint under the toggle).
+          {/* In-play badge, top-right of the pack: green "In Play" ⇄ gray "Off" on tap. */}
           <Pressable
             onPress={() => {
-              playGolfHit();
-              beginOpenPack(id);
+              if (enabled && isLastActive) return showToast(); // keep at least one challenge pack active
+              setPackEnabled(id, !enabled);
             }}
-            style={({ pressed }) => pressed && styles.pressed}
+            hitSlop={6}
+            style={[styles.playBadge, enabled ? styles.playBadgeOn : styles.playBadgeOff]}
           >
-            <Jiggle>
-              <PackFront pack={pack} width={Math.round(w * 0.8)} name={gridName} />
-            </Jiggle>
+            <Text style={styles.playBadgeText}>{enabled ? 'In Play' : 'Off'}</Text>
           </Pressable>
-        )}
-
-        {owned ? (
-          <View style={styles.toggleWrap}>
-            <View>
-              <Switch
-                value={enabled}
-                disabled={isLastActive}
-                onValueChange={(v) => setPackEnabled(id, v)}
-                trackColor={{ true: colors.primary, false: 'rgba(255,255,255,0.4)' }}
-                thumbColor={colors.white}
-              />
-              {isLastActive ? <Pressable style={StyleSheet.absoluteFill} onPress={showToast} /> : null}
-            </View>
-            <Text style={styles.toggleLabel}>{enabled ? 'In play' : 'Off'}</Text>
-          </View>
-        ) : null}
-      </>
+        </View>
+      );
+    }
+    // Unopened decks jiggle on their own random schedule; tapping the deck opens it.
+    return (
+      <Pressable
+        onPress={() => {
+          playGolfHit();
+          beginOpenPack(id);
+        }}
+        style={({ pressed }) => pressed && styles.pressed}
+      >
+        <Jiggle>
+          <PackFront pack={pack} width={Math.round(w * 0.8)} name={gridName} />
+        </Jiggle>
+      </Pressable>
     );
   };
 
@@ -222,6 +214,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
+    alignItems: 'flex-end', // align pack bottoms in a row (opened torn packs line up with sealed ones)
     rowGap: spacing.lg,
     paddingTop: 34, // clear the top fade so the first row sits fully below it at rest
     paddingBottom: 96, // clear the bottom fade so the last row can scroll fully into view
@@ -239,8 +232,28 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   pressed: { opacity: 0.7 },
-  toggleWrap: { alignItems: 'center', gap: 4 },
-  toggleLabel: { color: colors.white, fontSize: 12, fontWeight: '800' },
+  // Relative wrapper so the in-play badge can pin to the pack's top-right corner.
+  packWrap: { position: 'relative' },
+  playBadge: {
+    position: 'absolute',
+    top: -12,
+    right: -12,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.95)',
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+    zIndex: 50,
+  },
+  playBadgeOn: { backgroundColor: colors.primary }, // green = in play
+  playBadgeOff: { backgroundColor: '#8A9296' }, // gray = off
+  playBadgeText: { color: colors.white, fontSize: 11, fontWeight: '900', textAlign: 'center', letterSpacing: 0.2 },
   // The scroll area fills to the bottom of the view; the fade sits over its bottom edge.
   scrollArea: { flex: 1, position: 'relative' },
   scroll: { flex: 1 },

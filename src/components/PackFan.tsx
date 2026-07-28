@@ -41,10 +41,12 @@ export function PackFan({ name, count, cards, width, cardHeight, showLabel = tru
 
   if (ripped) {
     const rotStep = 4; // gentle fan
-    const rippedW = Math.round(width * 0.98); // torn pack spans nearly the full fan width
+    const rippedW = width; // torn pack matches the passed (unopened-pack) width
     const rippedH = Math.round(rippedW / RIPPED_RATIO);
+    const cardWr = Math.round(rippedW * 0.85); // cards sized in proportion to the pack
+    const cardHr = Math.round(cardWr / CARD_RATIO);
     const cardBottom = Math.round(rippedH * 0.25); // card bottoms tuck deep into the torn pack
-    const containerH = cardBottom + cardH + 6;
+    const containerH = cardBottom + cardHr + 6;
     return (
       <View style={[styles.wrap, { width, height: containerH }]}>
         {shown.map((card, i) => {
@@ -55,9 +57,9 @@ export function PackFan({ name, count, cards, width, cardHeight, showLabel = tru
               style={{
                 position: 'absolute',
                 bottom: cardBottom,
-                left: (width - cardW) / 2,
-                width: cardW,
-                height: cardH,
+                left: (width - cardWr) / 2,
+                width: cardWr,
+                height: cardHr,
                 // Pivot the fan from the bottom of the cards (their shared emerging point).
                 transformOrigin: 'center bottom',
                 transform: [{ rotateZ: `${o * rotStep}deg` }],
@@ -73,7 +75,7 @@ export function PackFan({ name, count, cards, width, cardHeight, showLabel = tru
         <Image
           source={ripped}
           resizeMode="stretch"
-          style={{ position: 'absolute', bottom: 0, left: (width - rippedW) / 2, width: rippedW, height: rippedH, zIndex: 20 }}
+          style={{ position: 'absolute', bottom: 0, left: 0, width: rippedW, height: rippedH, zIndex: 20 }}
         />
 
         {/* Pack name + card count printed on the torn pack. */}

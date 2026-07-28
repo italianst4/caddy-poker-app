@@ -2,12 +2,14 @@ import {
   Image,
   Pressable,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   useWindowDimensions,
   View,
 } from 'react-native';
 import { useState } from 'react';
+import Animated, { SlideInDown, SlideOutDown } from 'react-native-reanimated';
 import { LandscapeBackground } from '../components/LandscapeBackground';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { PackGridOverlay } from '../components/PackGridOverlay';
@@ -27,8 +29,10 @@ export function OverviewScreen() {
   const startRound = useGame((s) => s.startRound);
   const goTo = useGame((s) => s.goTo);
   const editGolfer = useGame((s) => s.editGolfer);
+  const setPackEnabled = useGame((s) => s.setPackEnabled);
 
   const [browsePack, setBrowsePack] = useState<PackId | null>(null);
+  const [changeOpen, setChangeOpen] = useState(false);
 
   const onStart = () => {
     playIronHit();
@@ -47,6 +51,15 @@ export function OverviewScreen() {
   const inPlay = CHALLENGE_PACK_IDS.filter((id) => ownedPacks[id] && packEnabled[id]);
   // In-play packs are shown as color pills, 3 to a row.
   const chipW = (width - spacing.lg * 2 - spacing.sm * 2) / 3;
+
+  // "Change" bottom sheet: owned challenge packs, toggled in/out of play (keep at least one on).
+  const ownedChallenge = CHALLENGE_PACK_IDS.filter((id) => ownedPacks[id]);
+  const enabledCount = ownedChallenge.filter((id) => packEnabled[id]).length;
+  const togglePack = (id: PackId) => {
+    const on = packEnabled[id];
+    if (on && enabledCount <= 1) return; // keep at least one challenge pack in play
+    setPackEnabled(id, !on);
+  };
 
   return (
     <View style={styles.root}>
@@ -85,6 +98,12 @@ export function OverviewScreen() {
       <View style={[styles.packsSection, { bottom: height - horizonY + spacing.md }]}>
         <View style={styles.packsHeaderRow}>
           <Text style={styles.packsLabel}>Challenge cards in play</Text>
+          <Pressable
+            onPress={() => setChangeOpen(true)}
+            style={({ pressed }) => [styles.changeBtn, pressed && styles.pressed]}
+          >
+            <Text style={styles.changeText}>Change</Text>
+          </Pressable>
         </View>
         <View style={styles.packsRow}>
           {inPlay.map((id) => {
@@ -126,6 +145,42 @@ export function OverviewScreen() {
           onClose={() => setBrowsePack(null)}
         />
       ) : null}
+
+      {/* "Change" bottom sheet — pick which owned challenge packs are in play. */}
+      {changeOpen ? (
+        <View style={styles.sheetRoot}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setChangeOpen(false)} />
+          <Animated.View entering={SlideInDown.duration(260)} exiting={SlideOutDown.duration(200)} style={styles.sheet}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.sheetTitle}>Challenge cards in play</Text>
+            <Text style={styles.sheetHint}>Tap to toggle. At least one stays in play.</Text>
+            <ScrollView style={styles.sheetList} showsVerticalScrollIndicator={false}>
+              {ownedChallenge.map((id) => {
+                const on = packEnabled[id];
+                return (
+                  <Pressable
+                    key={id}
+                    onPress={() => togglePack(id)}
+                    style={({ pressed }) => [styles.sheetRow, pressed && styles.pressed]}
+                  >
+                    <View style={[styles.check, on && styles.checkOn]}>
+                      {on ? <Text style={styles.checkMark}>✓</Text> : null}
+                    </View>
+                    <Text style={styles.sheetRowName}>{packById(id).name}</Text>
+                    <Text style={styles.sheetRowCount}>{cardsInPack(id).length} cards</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            <Pressable
+              onPress={() => setChangeOpen(false)}
+              style={({ pressed }) => [styles.sheetDone, pressed && styles.pressed]}
+            >
+              <Text style={styles.sheetDoneText}>Done</Text>
+            </Pressable>
+          </Animated.View>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -162,7 +217,58 @@ const styles = StyleSheet.create({
   },
   // Absolute so its bottom (the pills) can be pinned just above the horizon (top set inline).
   packsSection: { position: 'absolute', left: 0, right: 0, paddingHorizontal: spacing.lg, gap: spacing.sm },
-  packsHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  packsHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  changeBtn: {
+    borderRadius: radius.md,
+    backgroundColor: colors.gold,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  changeText: { color: colors.primaryText, fontSize: 13, fontWeight: '900', letterSpacing: 0.5 },
+  // "Change" bottom sheet.
+  sheetRoot: { ...StyleSheet.absoluteFillObject, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 100 },
+  sheet: {
+    backgroundColor: colors.bgElevated,
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xl,
+    maxHeight: '72%',
+  },
+  sheetHandle: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.25)', marginBottom: spacing.md },
+  sheetTitle: { color: colors.text, fontSize: 20, fontWeight: '900', textAlign: 'center' },
+  sheetHint: { color: colors.textMuted, fontSize: 13, fontWeight: '600', textAlign: 'center', marginTop: 2, marginBottom: spacing.sm },
+  sheetList: { alignSelf: 'stretch' },
+  sheetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  check: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 2,
+    borderColor: colors.textMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  checkMark: { color: colors.white, fontSize: 15, fontWeight: '900' },
+  sheetRowName: { flex: 1, color: colors.text, fontSize: 17, fontWeight: '800' },
+  sheetRowCount: { color: colors.textMuted, fontSize: 14, fontWeight: '700' },
+  sheetDone: {
+    backgroundColor: colors.gold,
+    borderRadius: radius.md,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    marginTop: spacing.md,
+  },
+  sheetDoneText: { color: colors.primaryText, fontSize: 17, fontWeight: '900' },
   packsLabel: {
     textAlign: 'left',
     color: colors.text,
