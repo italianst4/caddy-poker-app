@@ -96,7 +96,7 @@ export function FlipCard({ card, playerName, onDismiss, onRedraw, acceptLabel = 
           <CardBack source={back} style={styles.fill} />
         </Animated.View>
         <Animated.View style={[styles.face, frontStyle]}>
-          <CardArt card={card} style={styles.fill} />
+          <CardArt card={card} style={styles.fill} showHowToWin />
         </Animated.View>
       </View>
 

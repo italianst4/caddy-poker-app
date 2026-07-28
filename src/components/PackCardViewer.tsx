@@ -78,16 +78,22 @@ type Props = {
   cards: Card[];
   initialIndex?: number;
   onClose: () => void;
-  /** Show the "new card" sparkle flourish over each card (default true). */
+  /** Show the "new card" sparkle flourish over each card (default false). */
   sparkle?: boolean;
 };
 
 /** Full-screen, swipeable carousel of card faces. Tap ✕ (or the backdrop) to close. */
-export function PackCardViewer({ cards, initialIndex = 0, onClose, sparkle = true }: Props) {
-  const { width } = useWindowDimensions();
+export function PackCardViewer({ cards, initialIndex = 0, onClose, sparkle = false }: Props) {
+  const { width, height } = useWindowDimensions();
   const [index, setIndex] = useState(initialIndex);
-  const cardW = Math.min(width * 0.74, 320);
-  const cardH = cardW / CARD_RATIO;
+  // Fill most of the screen — bounded by width and height so it never overflows the viewport.
+  let cardW = Math.min(width * 0.88, 400);
+  let cardH = cardW / CARD_RATIO;
+  const maxH = height * 0.74;
+  if (cardH > maxH) {
+    cardH = maxH;
+    cardW = cardH * CARD_RATIO;
+  }
 
   const onScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     setIndex(Math.round(e.nativeEvent.contentOffset.x / width));
@@ -118,10 +124,9 @@ export function PackCardViewer({ cards, initialIndex = 0, onClose, sparkle = tru
         {cards.map((card) => (
           <View key={card.id} style={[styles.page, { width }]}>
             <View style={{ width: cardW, height: cardH }}>
-              <CardArt card={card} style={styles.card} />
+              <CardArt card={card} style={styles.card} showHowToWin />
               {sparkle ? <Sparkles width={cardW} height={cardH} /> : null}
             </View>
-            <Text style={styles.name}>{card.name}</Text>
           </View>
         ))}
       </ScrollView>
@@ -154,17 +159,8 @@ const styles = StyleSheet.create({
   closeText: { color: colors.white, fontSize: 24, fontWeight: '900' },
   pressed: { opacity: 0.6 },
   scroll: { flexGrow: 0 },
-  page: { alignItems: 'center', justifyContent: 'center', gap: spacing.lg },
+  page: { alignItems: 'center', justifyContent: 'center' },
   card: { width: '100%', height: '100%' },
-  name: {
-    color: colors.gold,
-    fontSize: 22,
-    fontWeight: '900',
-    textAlign: 'center',
-    textShadowColor: 'rgba(0,0,0,0.55)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 5,
-  },
   hint: {
     position: 'absolute',
     bottom: spacing.xl,

@@ -2,15 +2,24 @@ import type { ImageSourcePropType } from 'react-native';
 // Type-only import — erased at compile, so this does not create a runtime cycle with packs.ts
 // (which imports CARDS from here).
 import type { PackId } from './packs';
+import { CARDS as GENERATED_CARDS } from './cards.generated';
 
-export type CardType = 'white' | 'black' | 'matchup' | 'caddy';
-export type GameMode = 'amateur' | 'pro';
+/** Individual = per-player achieved/failed challenge; Matchup = head-to-head for the whole group. */
+export type CardKind = 'individual' | 'matchup';
 
 export type Card = {
-  id: string;
+  id: string; // `${pack}-${slug}` — pack-scoped, unique
   name: string;
-  type: CardType;
-  image: ImageSourcePropType;
+  pack: PackId; // explicit pack membership
+  kind: CardKind;
+  /** Matchup cards only: allow selecting more than one winner (co-winners each earn the reward). */
+  multiWinner: boolean;
+  /** Short text shown on the card face (the "CHALLENGE" line). */
+  challenge: string;
+  /** Long detail text shown in the card's "How to win" overlay. */
+  howToWin: string;
+  /** Illustration art; optional so a card missing art falls back to a text placeholder. */
+  image?: ImageSourcePropType;
   /** Caddy cards: the rule text printed on the card (transcribed from the art). */
   details?: string;
   /** Caddy cards: the card's category label (e.g. "Wild Card", "Suit Manipulation"). */
@@ -18,81 +27,27 @@ export type Card = {
 };
 
 /**
- * The card manifest, built from the supplied artwork in assets/cards/{white,black,matchup}.
- *
- * - `white`   challenge cards — drawn in BOTH amateur and pro modes.
- * - `black`   challenge cards — drawn ONLY in pro mode.
- * - `matchup` cards — drawn in BOTH modes; trigger a head-to-head for the whole group.
- *
- * Display names are derived from the file names. To add/replace a card, drop the PNG in the
- * matching folder and add an entry here.
+ * The challenge-card manifest, generated from `assets/cards/cards.csv` by `scripts/gen-cards.js`
+ * (run `npm run gen:cards`). Each entry statically `require()`s its illustration under
+ * `assets/cards/illustrations/<pack>/`. Caddy cards live separately in `caddyCards.ts`.
  */
-export const CARDS: Card[] = [
-  // ---- White-tee (amateur) challenges ----
-  { id: 'w-bogey-train', name: 'Bogey Train', type: 'white', image: require('../../assets/cards/white/Bogey-Train.png') },
-  { id: 'w-cap-the-damage', name: 'Cap the Damage', type: 'white', image: require('../../assets/cards/white/Cap-the-Damage.png') },
-  { id: 'w-find-it', name: 'Find It', type: 'white', image: require('../../assets/cards/white/Find-It.png') },
-  { id: 'w-greenlight', name: 'Greenlight', type: 'white', image: require('../../assets/cards/white/Greenlight.png') },
-  { id: 'w-lag-it-close', name: 'Lag It Close', type: 'white', image: require('../../assets/cards/white/Lag-It-Close.png') },
-  { id: 'w-make-par', name: 'Make Par', type: 'white', image: require('../../assets/cards/white/Make-Par.png') },
-  { id: 'w-no-snowman', name: 'No Snowman', type: 'white', image: require('../../assets/cards/white/No-Snowman.png') },
-  { id: 'w-no-three-jacks', name: 'No Three Jacks', type: 'white', image: require('../../assets/cards/white/No-Three-Jacks.png') },
-  { id: 'w-not-the-goat', name: 'Not the Goat', type: 'white', image: require('../../assets/cards/white/Not-the-Goat.png') },
-  { id: 'w-one-and-done', name: 'One and Done', type: 'white', image: require('../../assets/cards/white/One-and-Done.png') },
-  { id: 'w-skip-the-beach', name: 'Skip the Beach', type: 'white', image: require('../../assets/cards/white/Skip-the-Beach.png') },
-  { id: 'w-split-the-fairway', name: 'Split the Fairway', type: 'white', image: require('../../assets/cards/white/Split-the-Fairway.png') },
-  { id: 'w-stay-dry', name: 'Stay Dry', type: 'white', image: require('../../assets/cards/white/Stay-Dry.png') },
-  { id: 'w-tree-free', name: 'Tree Free', type: 'white', image: require('../../assets/cards/white/Tree-Free.png') },
+export const CARDS: Card[] = GENERATED_CARDS;
 
-  // ---- Black-tee (pro-only) challenges ----
-  { id: 'b-birdie-hunter', name: 'Birdie Hunter', type: 'black', image: require('../../assets/cards/black/Birdie-Hunter.png') },
-  { id: 'b-drain-the-bomb', name: 'Drain the Bomb', type: 'black', image: require('../../assets/cards/black/Drain-the-Bomb.png') },
-  { id: 'b-go-for-it', name: 'Go For It', type: 'black', image: require('../../assets/cards/black/Go-For-It.png') },
-  { id: 'b-nuke-it', name: 'Nuke It', type: 'black', image: require('../../assets/cards/black/Nuke-It.png') },
-
-  // ---- Matchup cards (both modes) ----
-  { id: 'm-closest-to-the-pin', name: 'Closest to the Pin', type: 'matchup', image: require('../../assets/cards/matchup/Closest-to-the-Pin.png') },
-  { id: 'm-long-ball', name: 'Long Ball', type: 'matchup', image: require('../../assets/cards/matchup/Long-Ball.png') },
-];
-
-export const isMatchup = (c: Card): boolean => c.type === 'matchup';
+export const isMatchup = (c: Card): boolean => c.kind === 'matchup';
 
 /**
- * Build the per-round draw pool, INCLUDING duplicate copies:
- *   - 2 copies of each white card
- *   - 1 copy of each black card (pro mode only)
- *   - 1 copy of each matchup card (both modes)
- *
- * A card only enters the pool if the player OWNS its pack — ownership is the source of truth for
- * availability, while `mode`/`includeMatchups` are the in-play toggles layered on top. So an
- * unowned pack contributes nothing even if its toggle is on.
- *
- * Duplicates are real array slots, so two players can draw the same white challenge in a
- * hole. `drawDistinct` selects distinct slots, which preserves that behaviour.
+ * Build the per-round draw pool: one copy of each in-play challenge card. A card enters the pool
+ * only if the player OWNS its pack AND that pack is enabled (`packEnabled`). Caddy cards are never
+ * in `CARDS`, so they never enter the pool.
  */
 export function buildDrawPool(
-  mode: GameMode,
-  includeMatchups: boolean,
   ownedPacks: Record<PackId, boolean>,
-  includeWhite = true
+  packEnabled: Record<PackId, boolean>
 ): Card[] {
-  const pool: Card[] = [];
-  for (const card of CARDS) {
-    if (card.type === 'white') {
-      if (includeWhite && ownedPacks['white-tees']) pool.push(card, card); // 2 copies
-    } else if (card.type === 'matchup') {
-      if (includeMatchups && ownedPacks['matchups']) pool.push(card); // 1 copy, both modes
-    } else if (card.type === 'black') {
-      if (mode === 'pro' && ownedPacks['black-tees']) pool.push(card); // 1 copy, pro only
-    }
-  }
-  return pool;
+  return CARDS.filter((c) => ownedPacks[c.pack] && packEnabled[c.pack]);
 }
 
-/**
- * Draw `n` distinct slots from `pool` (Fisher–Yates partial shuffle). Because `pool` may
- * contain duplicate cards, the same card can legitimately be returned more than once.
- */
+/** Draw `n` distinct cards from `pool` (Fisher–Yates partial shuffle). */
 export function drawDistinct(pool: Card[], n: number): Card[] {
   const items = pool.slice();
   for (let i = items.length - 1; i > 0; i--) {
@@ -102,7 +57,7 @@ export function drawDistinct(pool: Card[], n: number): Card[] {
   return items.slice(0, Math.min(n, items.length));
 }
 
-/** Resolve a card id back to its card (used when rehydrating persisted state). */
+/** Resolve a challenge-card id back to its card (used when rehydrating persisted state). */
 export function cardById(id: string): Card | undefined {
   return CARDS.find((c) => c.id === id);
 }

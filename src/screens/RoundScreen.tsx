@@ -202,7 +202,8 @@ function MatchupPhase() {
 
   const info = matchup[currentHole];
   const card = info ? cardById(info.cardId) : undefined;
-  const winner = info?.winner ?? null;
+  const winners = info?.winners ?? [];
+  const multi = !!card?.multiWinner;
   const isLastHole = currentHole >= holes;
 
   const cardWidth = Math.min(width * 0.42, 180);
@@ -215,9 +216,11 @@ function MatchupPhase() {
   }, [celebration]);
 
   const onSelectWinner = (i: number) => {
-    const isNewWinner = winner !== i;
+    // For multi-winner cards a tap toggles; celebrate only when adding a winner. Single-winner
+    // taps always set a (new) winner, so always celebrate.
+    const willWin = multi ? !winners.includes(i) : true;
     setMatchupWinner(i);
-    if (isNewWinner) {
+    if (willWin) {
       setCelebration((prev) => ({
         id: (prev?.id ?? 0) + 1,
         winner: i,
@@ -230,19 +233,19 @@ function MatchupPhase() {
     <View style={styles.safe}>
       <ScreenLayout
         title="Matchup!"
-        subtitle={`Winner earns ${MATCHUP_REWARD} poker cards.`}
+        subtitle={multi ? `Winners each earn ${MATCHUP_REWARD} poker cards.` : `Winner earns ${MATCHUP_REWARD} poker cards.`}
         scroll
         headerRight={<ScoreChips onPress={() => viewScorecard('round')} />}
       >
         <View style={styles.matchupTop}>
-          {card ? <CardArt card={card} style={{ width: cardWidth }} /> : null}
-          <Text style={styles.matchupPrompt}>Tap the golfer who won!</Text>
+          {card ? <CardArt card={card} style={{ width: cardWidth }} showHowToWin /> : null}
+          <Text style={styles.matchupPrompt}>{multi ? 'Tap everyone who won!' : 'Tap the golfer who won!'}</Text>
         </View>
 
         <View style={styles.matchupGolfers}>
           {players.map((name, i) => {
             const g = GOLFERS[avatars[i] ?? i] ?? GOLFERS[0];
-            const isWinner = winner === i;
+            const isWinner = winners.includes(i);
             return (
               <Pressable
                 key={i}
@@ -280,8 +283,8 @@ function MatchupPhase() {
         <View style={{ height: 76 }} />
       </ScreenLayout>
 
-      {/* Next Hole slides up once a winner has been picked. */}
-      <SlideUpFooter visible={winner != null}>
+      {/* Next Hole slides up once at least one winner has been picked. */}
+      <SlideUpFooter visible={winners.length > 0}>
         <PrimaryButton
           label={isLastHole ? 'Continue' : 'Next Hole'}
           onPress={nextHole}

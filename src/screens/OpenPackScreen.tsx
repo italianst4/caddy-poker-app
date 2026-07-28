@@ -44,7 +44,7 @@ const FADE_SKY_CLEAR = `rgba(${SKY},0)`;
 // so a re-drawn copy of the landscape lines up exactly with the real background behind the screen.
 const HORIZON_FRAC = 0.798;
 const BG_RATIO = 1109 / 1800;
-const LANDSCAPE = require('../../assets/cp-landscaping.png');
+const LANDSCAPE = require('../../assets/scenery/cp-landscaping.png');
 
 // One tap flips the pack open with a continuous rumble that lasts until every card is on screen.
 const FLIP_MS = 520;
@@ -60,7 +60,7 @@ export function OpenPackScreen() {
   const goTo = useGame((s) => s.goTo);
 
   // Fall back to the starter pack if we somehow arrived without a target (defensive).
-  const packId = openingPackId ?? 'white-tees';
+  const packId = openingPackId ?? 'standard';
   const pack = packById(packId);
   const cards = cardsInPack(packId);
   // Onboarding = the required first open reached from the New Round flow (hole-count step) — NOT
@@ -195,16 +195,18 @@ export function OpenPackScreen() {
       <LandscapeBackground hideClouds />
 
       <SafeAreaView style={styles.safe}>
-        {/* Elevated so the back button stays on top of (and tappable over) the shifted-up content. */}
+        {/* Elevated so the back button stays on top of (and tappable over) the shifted-up content.
+            In the opened grid view the pack name sits inline with the back button. */}
         <View style={styles.headerLayer}>
-          <ScreenHeader title="" onBack={onBack} />
+          <ScreenHeader title={revealed ? pack.openTitle : ''} onBack={onBack} />
         </View>
 
         {/* box-none so the shifted-up title area doesn't swallow taps meant for the back button. */}
         <View pointerEvents="box-none" style={[styles.content, !revealed && !isOnboarding && styles.contentShiftUp]}>
-          {/* On first-time onboarding we drop the title so the pack + invitation are the focus. */}
-          {revealed || !isOnboarding ? <Text style={styles.title}>{pack.openTitle}</Text> : null}
-          {/* When opening a pack, the prompt sits right below the pack name. */}
+          {/* Opened grid: the deck summary sits under the (in-header) title. */}
+          {revealed ? <Text style={styles.gridBlurb}>{pack.blurb}</Text> : null}
+          {/* Sealed non-onboarding: centered pack name + prompt above the pack. */}
+          {!revealed && !isOnboarding ? <Text style={styles.title}>{pack.openTitle}</Text> : null}
           {!revealed && !isOnboarding ? (
             <Text style={styles.intro}>Open the {pack.name} pack.</Text>
           ) : null}
@@ -299,7 +301,6 @@ export function OpenPackScreen() {
           cards={cards}
           initialIndex={viewerIndex}
           onClose={() => setViewerIndex(null)}
-          sparkle={!packBrowse}
         />
       ) : null}
     </View>
@@ -341,6 +342,16 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
     paddingHorizontal: spacing.md,
+  },
+  // Deck summary under the (in-header) title on the opened grid view.
+  gridBlurb: {
+    color: colors.text,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '700',
+    textAlign: 'center',
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
   },
   // Onboarding hero text for "Before we play…" (25% smaller than the prior 34px).
   introLarge: { fontSize: 26, lineHeight: 32, fontWeight: '800', marginTop: 0 },

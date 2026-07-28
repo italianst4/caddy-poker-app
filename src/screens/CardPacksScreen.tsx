@@ -1,18 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Switch, Text, useWindowDimensions, View } from 'react-native';
 import Animated, { SlideInDown, SlideOutDown } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { CloudLayer } from '../components/CloudLayer';
 import { PackFront, PACK_RATIO } from '../components/PackFront';
 import { PackFan } from '../components/PackFan';
 import { Jiggle } from '../components/Jiggle';
 import { useGame } from '../store/gameStore';
-import { CHALLENGE_PACK_IDS, CADDY_PACK_IDS, cardsInPack, packById, type PackId } from '../data/packs';
+import { CHALLENGE_PACK_IDS, CADDY_PACK_IDS, PACK_THEME, cardsInPack, packById, type PackId } from '../data/packs';
 import { playGolfHit } from '../sounds';
 import { colors, radius, spacing } from '../theme';
 
 // Solid sky blue (sampled from the landscape) — the Card Packs view uses a flat background.
 const SKY_BLUE = '#42A7DE';
+const SKY_RGB = '66,167,222';
+const SKY_CLEAR = `rgba(${SKY_RGB},0)`;
+const SKY_SOLID = `rgba(${SKY_RGB},1)`;
 
 type Tab = 'challenge' | 'caddy';
 
@@ -20,9 +24,7 @@ export function CardPacksScreen() {
   const { width } = useWindowDimensions();
   const goTo = useGame((s) => s.goTo);
   const ownedPacks = useGame((s) => s.ownedPacks);
-  const mode = useGame((s) => s.mode);
-  const includeMatchups = useGame((s) => s.includeMatchups);
-  const includeWhite = useGame((s) => s.includeWhite);
+  const packEnabled = useGame((s) => s.packEnabled);
   const includeCaddies = useGame((s) => s.includeCaddies);
   const setPackEnabled = useGame((s) => s.setPackEnabled);
   const beginOpenPack = useGame((s) => s.beginOpenPack);
@@ -47,12 +49,7 @@ export function CardPacksScreen() {
   const caddyW = Math.min(Math.round(width * 0.5), 220);
 
   // Whether an owned pack is currently in play (drives its toggle).
-  const isEnabled = (id: PackId): boolean => {
-    if (id === 'white-tees') return includeWhite;
-    if (id === 'black-tees') return mode === 'pro';
-    if (id === 'matchups') return includeMatchups;
-    return includeCaddies; // caddy
-  };
+  const isEnabled = (id: PackId): boolean => (id === 'caddy' ? includeCaddies : packEnabled[id]);
 
   // Challenge packs must keep at least one active; the caddy pack has no such rule.
   const activeChallenge = CHALLENGE_PACK_IDS.filter((id) => ownedPacks[id] && isEnabled(id)).length;
@@ -76,11 +73,13 @@ export function CardPacksScreen() {
               cards={cardsInPack(id)}
               width={w}
               cardHeight={unopenedPackH * 0.9}
+              ripped={pack.ripped}
+              ink={PACK_THEME[id].ink}
             />
           </Pressable>
         ) : (
           // Unopened decks are shown 20% smaller and jiggle on their own random schedule.
-          // Tapping the deck opens it (same as the OPEN button below).
+          // Tapping the deck opens it (see the "Tap any deck to open" hint under the toggle).
           <Pressable
             onPress={() => {
               playGolfHit();
@@ -108,17 +107,7 @@ export function CardPacksScreen() {
             </View>
             <Text style={styles.toggleLabel}>{enabled ? 'In play' : 'Off'}</Text>
           </View>
-        ) : (
-          <Pressable
-            onPress={() => {
-              playGolfHit();
-              beginOpenPack(id);
-            }}
-            style={({ pressed }) => [styles.openBtn, pressed && styles.pressed]}
-          >
-            <Text style={styles.openText}>OPEN</Text>
-          </Pressable>
-        )}
+        ) : null}
       </>
     );
   };
@@ -146,34 +135,47 @@ export function CardPacksScreen() {
             ))}
           </View>
 
-          {tab === 'challenge' ? (
-            <ScrollView
-              contentContainerStyle={[styles.grid, { paddingHorizontal: H_INSET }]}
-              showsVerticalScrollIndicator={false}
-            >
-              {CHALLENGE_PACK_IDS.map((id) => (
-                <View key={id} style={[styles.cell, { width: cellW }]}>
-                  {renderPack(id, cellW, true)}
-                </View>
-              ))}
-            </ScrollView>
-          ) : (
-            <ScrollView contentContainerStyle={styles.caddyScroll} showsVerticalScrollIndicator={false}>
-              {CADDY_PACK_IDS.map((id) => (
-                <View key={id} style={styles.caddyCell}>
-                  {renderPack(id, caddyW, false)}
-                  <Text style={styles.packDesc}>{packById(id).blurb}</Text>
-                </View>
-              ))}
-            </ScrollView>
-          )}
+          <Text style={styles.hint}>Tap any deck to open</Text>
 
-          <Pressable
-            onPress={() => goTo(packsReturn, 'pop')}
-            style={({ pressed }) => [styles.continueBtn, pressed && styles.pressed]}
-          >
-            <Text style={styles.continueText}>Continue</Text>
-          </Pressable>
+          {/* Scroll fills to the bottom of the view; a soft gradient lets the packs fade under it. */}
+          <View style={styles.scrollArea}>
+            {tab === 'challenge' ? (
+              <ScrollView
+                style={styles.scroll}
+                contentContainerStyle={[styles.grid, { paddingHorizontal: H_INSET }]}
+                showsVerticalScrollIndicator={false}
+              >
+                {CHALLENGE_PACK_IDS.map((id) => (
+                  <View key={id} style={[styles.cell, { width: cellW }]}>
+                    {renderPack(id, cellW, true)}
+                  </View>
+                ))}
+              </ScrollView>
+            ) : (
+              <ScrollView style={styles.scroll} contentContainerStyle={styles.caddyScroll} showsVerticalScrollIndicator={false}>
+                {CADDY_PACK_IDS.map((id) => (
+                  <View key={id} style={styles.caddyCell}>
+                    {renderPack(id, caddyW, false)}
+                    <Text style={styles.packDesc}>{packById(id).blurb}</Text>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+            {/* Packs fade under the toggle/subtext above and into the background below. */}
+            <LinearGradient pointerEvents="none" colors={[SKY_SOLID, SKY_CLEAR]} style={styles.fadeTop} />
+            <LinearGradient pointerEvents="none" colors={[SKY_CLEAR, SKY_SOLID]} style={styles.fadeBottom} />
+          </View>
+
+          {/* Continue only appears when Card Packs was opened mid-setup (e.g. from the Ready-to-play
+              view), not from the Menu — there the back arrow is the way out. */}
+          {packsReturn !== 'menu' ? (
+            <Pressable
+              onPress={() => goTo(packsReturn, 'pop')}
+              style={({ pressed }) => [styles.continueBtn, pressed && styles.pressed]}
+            >
+              <Text style={styles.continueText}>Continue</Text>
+            </Pressable>
+          ) : null}
         </SafeAreaView>
       </View>
 
@@ -201,7 +203,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(11,31,23,0.25)',
     borderRadius: 999,
     padding: 3,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  // Hint under the segmented toggle — replaces the per-deck OPEN buttons.
+  hint: {
+    color: colors.white,
+    fontSize: 14,
+    fontWeight: '700',
+    textAlign: 'center',
+    opacity: 0.9,
+    marginBottom: spacing.sm,
   },
   segmentBtn: { paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderRadius: 999 },
   segmentBtnOn: { backgroundColor: colors.gold },
@@ -212,11 +223,11 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'space-between',
     rowGap: spacing.lg,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.lg,
+    paddingTop: 34, // clear the top fade so the first row sits fully below it at rest
+    paddingBottom: 96, // clear the bottom fade so the last row can scroll fully into view
   },
   cell: { alignItems: 'center', gap: spacing.sm },
-  caddyScroll: { alignItems: 'center', paddingTop: spacing.md, paddingBottom: spacing.lg },
+  caddyScroll: { alignItems: 'center', paddingTop: 34, paddingBottom: 96 },
   caddyCell: { alignItems: 'center', gap: spacing.md },
   // Short pack blurb shown below an (unopened) pack — same size as the caddy description.
   packDesc: {
@@ -230,19 +241,20 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.7 },
   toggleWrap: { alignItems: 'center', gap: 4 },
   toggleLabel: { color: colors.white, fontSize: 12, fontWeight: '800' },
-  openBtn: {
-    backgroundColor: colors.gold,
-    borderRadius: radius.sm,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.xl,
-  },
-  openText: { color: colors.primaryText, fontSize: 15, fontWeight: '900', letterSpacing: 1 },
+  // The scroll area fills to the bottom of the view; the fade sits over its bottom edge.
+  scrollArea: { flex: 1, position: 'relative' },
+  scroll: { flex: 1 },
+  // Soft gradients so packs dissolve into the background at the top (under the toggle/subtext) and
+  // the bottom. Both bleed past the screen's horizontal padding to span edge-to-edge.
+  fadeTop: { position: 'absolute', left: -spacing.lg, right: -spacing.lg, top: 0, height: 40 },
+  fadeBottom: { position: 'absolute', left: -spacing.lg, right: -spacing.lg, bottom: 0, height: 104 },
   continueBtn: {
     backgroundColor: colors.gold,
     borderRadius: radius.md,
     paddingVertical: spacing.md,
     marginHorizontal: spacing.lg,
-    marginBottom: spacing.md,
+    marginTop: spacing.sm,
+    marginBottom: spacing.lg,
     alignItems: 'center',
   },
   continueText: { color: colors.primaryText, fontSize: 18, fontWeight: '900' },

@@ -24,7 +24,7 @@ export function CardViewer({ card, playerName, onDismiss, dismissLabel = 'Done' 
       <Text style={styles.player}>{playerName}</Text>
 
       <View style={[styles.cardArea, { width: cardWidth, height: cardWidth / CARD_RATIO }]}>
-        <CardArt card={card} style={styles.fill} />
+        <CardArt card={card} style={styles.fill} showHowToWin />
       </View>
 
       <View style={styles.buttonWrap}>

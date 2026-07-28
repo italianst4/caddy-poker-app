@@ -2,7 +2,7 @@ import type { Card } from './cards';
 import { CATEGORY, type CaddyEffect } from './pokerDeck';
 
 /** Shared back for caddy cards. */
-export const CADDY_BACK = require('../../assets/cards/caddy-card-back.png');
+export const CADDY_BACK = require('../../assets/cards/backs/caddy-card-back.png');
 
 /**
  * The caddy deck — bonus cards drawn after the round to improve a poker hand.
@@ -10,18 +10,18 @@ export const CADDY_BACK = require('../../assets/cards/caddy-card-back.png');
  * for the matching mechanical effect applied in the virtual poker finale).
  */
 export const CADDY_CARDS: Card[] = [
-  { id: 'almost-a-flush', name: 'Almost a Flush', type: 'caddy', image: require('../../assets/cards/caddy/almost-a-flush.png'), category: 'Suit Manipulation', details: 'A 4-card flush counts as a full flush' },
-  { id: 'dead-mans-hand', name: "Dead Man's Hand", type: 'caddy', image: require('../../assets/cards/caddy/dead-mans-hand.png'), category: 'Wild Card', details: 'All aces and eights are wild' },
-  { id: 'deuces-wild', name: 'Deuces Wild', type: 'caddy', image: require('../../assets/cards/caddy/deuces-wild.png'), category: 'Wild Card', details: '2s are wild' },
-  { id: 'in-the-black', name: 'In the Black', type: 'caddy', image: require('../../assets/cards/caddy/in-the-black.png'), category: 'Suit Manipulation', details: 'All black cards are one suit' },
-  { id: 'mulligan-draw', name: 'Mulligan Draw', type: 'caddy', image: require('../../assets/cards/caddy/mulligan-draw.png'), category: 'Draw & Swap', details: 'Draw 2 extra cards, keep 1' },
-  { id: 'one-eyed-caddies', name: 'One-Eyed Caddies', type: 'caddy', image: require('../../assets/cards/caddy/one-eyed-caddies.png'), category: 'Wild Card', details: 'Jack of spades and jack of hearts are wild' },
-  { id: 'pair-up', name: 'Pair Up', type: 'caddy', image: require('../../assets/cards/caddy/pair-up.png'), category: 'Hand Booster', details: 'Pairs count as three-of-a-kind' },
-  { id: 'pocket-aces', name: 'Pocket Aces', type: 'caddy', image: require('../../assets/cards/caddy/pocket-aces.png'), category: 'Wild Card', details: 'Aces are wild' },
-  { id: 'seeing-red', name: 'Seeing Red', type: 'caddy', image: require('../../assets/cards/caddy/seeing-red.png'), category: 'Suit Manipulation', details: 'All red cards are one suit' },
-  { id: 'the-kings-suicide', name: "The King's Suicide", type: 'caddy', image: require('../../assets/cards/caddy/the-kings-suicide.png'), category: 'Wild Card', details: 'King of hearts is wild' },
-  { id: 'three-to-tee', name: 'Three to Tee', type: 'caddy', image: require('../../assets/cards/caddy/three-to-tee.png'), category: 'Straight Helper', details: 'A 4-card straight counts as a full straight' },
-  { id: 'trips-to-quads', name: 'Trips to Quads', type: 'caddy', image: require('../../assets/cards/caddy/trips-to-quads.png'), category: 'Hand Booster', details: 'Three-of-a-kind counts as four-of-a-kind' },
+  { id: 'almost-a-flush', name: 'Almost a Flush', pack: 'caddy', kind: 'individual', multiWinner: false, challenge: '', howToWin: '', image: require('../../assets/cards/illustrations/caddy/almost-a-flush.png'), category: 'Suit Manipulation', details: 'A 4-card flush counts as a full flush' },
+  { id: 'dead-mans-hand', name: "Dead Man's Hand", pack: 'caddy', kind: 'individual', multiWinner: false, challenge: '', howToWin: '', image: require('../../assets/cards/illustrations/caddy/dead-mans-hand.png'), category: 'Wild Card', details: 'All aces and eights are wild' },
+  { id: 'deuces-wild', name: 'Deuces Wild', pack: 'caddy', kind: 'individual', multiWinner: false, challenge: '', howToWin: '', image: require('../../assets/cards/illustrations/caddy/deuces-wild.png'), category: 'Wild Card', details: '2s are wild' },
+  { id: 'in-the-black', name: 'In the Black', pack: 'caddy', kind: 'individual', multiWinner: false, challenge: '', howToWin: '', image: require('../../assets/cards/illustrations/caddy/in-the-black.png'), category: 'Suit Manipulation', details: 'All black cards are one suit' },
+  { id: 'mulligan-draw', name: 'Mulligan Draw', pack: 'caddy', kind: 'individual', multiWinner: false, challenge: '', howToWin: '', image: require('../../assets/cards/illustrations/caddy/mulligan-draw.png'), category: 'Draw & Swap', details: 'Draw 2 extra cards, keep 1' },
+  { id: 'one-eyed-caddies', name: 'One-Eyed Caddies', pack: 'caddy', kind: 'individual', multiWinner: false, challenge: '', howToWin: '', image: require('../../assets/cards/illustrations/caddy/one-eyed-caddies.png'), category: 'Wild Card', details: 'Jack of spades and jack of hearts are wild' },
+  { id: 'pair-up', name: 'Pair Up', pack: 'caddy', kind: 'individual', multiWinner: false, challenge: '', howToWin: '', image: require('../../assets/cards/illustrations/caddy/pair-up.png'), category: 'Hand Booster', details: 'Pairs count as three-of-a-kind' },
+  { id: 'pocket-aces', name: 'Pocket Aces', pack: 'caddy', kind: 'individual', multiWinner: false, challenge: '', howToWin: '', image: require('../../assets/cards/illustrations/caddy/pocket-aces.png'), category: 'Wild Card', details: 'Aces are wild' },
+  { id: 'seeing-red', name: 'Seeing Red', pack: 'caddy', kind: 'individual', multiWinner: false, challenge: '', howToWin: '', image: require('../../assets/cards/illustrations/caddy/seeing-red.png'), category: 'Suit Manipulation', details: 'All red cards are one suit' },
+  { id: 'the-kings-suicide', name: "The King's Suicide", pack: 'caddy', kind: 'individual', multiWinner: false, challenge: '', howToWin: '', image: require('../../assets/cards/illustrations/caddy/the-kings-suicide.png'), category: 'Wild Card', details: 'King of hearts is wild' },
+  { id: 'three-to-tee', name: 'Three to Tee', pack: 'caddy', kind: 'individual', multiWinner: false, challenge: '', howToWin: '', image: require('../../assets/cards/illustrations/caddy/three-to-tee.png'), category: 'Straight Helper', details: 'A 4-card straight counts as a full straight' },
+  { id: 'trips-to-quads', name: 'Trips to Quads', pack: 'caddy', kind: 'individual', multiWinner: false, challenge: '', howToWin: '', image: require('../../assets/cards/illustrations/caddy/trips-to-quads.png'), category: 'Hand Booster', details: 'Three-of-a-kind counts as four-of-a-kind' },
 ];
 
 export function caddyById(id: string): Card | undefined {

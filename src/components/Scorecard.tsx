@@ -91,7 +91,7 @@ export function Scorecard() {
   // Poker cards a golfer earned on a given hole.
   const countFor = (hole: number, i: number) => {
     const m = matchup[hole];
-    if (m) return m.winner === i ? MATCHUP_REWARD : 0;
+    if (m) return m.winners.includes(i) ? MATCHUP_REWARD : 0;
     return results[hole]?.[i] === 'achieved' ? 1 : 0;
   };
   const isPlayed = (hole: number, i: number) =>
@@ -103,7 +103,7 @@ export function Scorecard() {
     for (let hole = 1; hole <= holes; hole++) {
       const m = matchup[hole];
       if (m) {
-        if (m.winner === i) {
+        if (m.winners.includes(i)) {
           const c = cardById(m.cardId);
           if (c) list.push({ card: c, hole });
         }
@@ -244,9 +244,12 @@ export function Scorecard() {
           initialIndex={fan.initialIndex}
           onClose={() => setFan(null)}
           onIncorrect={(hole) => {
-            // Undo the earn: clear a matchup win, or flip a normal hole to failed.
-            if (matchup[hole]) setHoleMatchupWinner(hole, null);
-            else setHoleResult(hole, fan.playerIdx, 'failed');
+            // Undo the earn: remove just this player from the matchup winners, or flip a normal hole to failed.
+            if (matchup[hole]) {
+              setHoleMatchupWinner(hole, (matchup[hole]?.winners ?? []).filter((w) => w !== fan.playerIdx));
+            } else {
+              setHoleResult(hole, fan.playerIdx, 'failed');
+            }
           }}
         />
       ) : null}

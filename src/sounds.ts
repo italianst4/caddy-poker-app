@@ -14,11 +14,11 @@ function ensure() {
     // Play SFX even when the device is on silent.
     setAudioModeAsync({ playsInSilentMode: true }).catch(() => {});
   }
-  if (!ballInHole) ballInHole = createAudioPlayer(require('../assets/sound-effects/ball-in-hole.mp3'));
-  if (!ironHit) ironHit = createAudioPlayer(require('../assets/sound-effects/iron-hit-ball.mp3'));
-  if (!golfHit) golfHit = createAudioPlayer(require('../assets/sound-effects/golf-hit.mp3'));
-  if (!golfCrowd) golfCrowd = createAudioPlayer(require('../assets/sound-effects/golf-crowd.mp3'));
-  if (!cardFlip) cardFlip = createAudioPlayer(require('../assets/sound-effects/card-flip.mp3'));
+  if (!ballInHole) ballInHole = createAudioPlayer(require('../assets/audio/sfx/ball-in-hole.mp3'));
+  if (!ironHit) ironHit = createAudioPlayer(require('../assets/audio/sfx/iron-hit-ball.mp3'));
+  if (!golfHit) golfHit = createAudioPlayer(require('../assets/audio/sfx/golf-hit.mp3'));
+  if (!golfCrowd) golfCrowd = createAudioPlayer(require('../assets/audio/sfx/golf-crowd.mp3'));
+  if (!cardFlip) cardFlip = createAudioPlayer(require('../assets/audio/sfx/card-flip.mp3'));
 }
 
 function restart(player: AudioPlayer | null) {

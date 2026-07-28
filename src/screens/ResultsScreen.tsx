@@ -3,16 +3,14 @@ import { Image, Pressable, StyleSheet, Switch, Text, useWindowDimensions, View }
 import { ScreenLayout } from '../components/ScreenLayout';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { PackFront } from '../components/PackFront';
-import { PackFan } from '../components/PackFan';
 import { Jiggle } from '../components/Jiggle';
 import { CaddyDeckOverlay } from '../components/CaddyDeckOverlay';
 import { GOLFERS, MAX_GOLFER_RATIO } from '../data/golfers';
-import { packById, cardsInPack } from '../data/packs';
+import { packById } from '../data/packs';
 import { useGame } from '../store/gameStore';
 import { colors, spacing } from '../theme';
 
 const CADDY_PACK = packById('caddy');
-const CADDY_CARDS = cardsInPack('caddy');
 
 export function ResultsScreen() {
   const { width, height } = useWindowDimensions();
@@ -52,22 +50,13 @@ export function ResultsScreen() {
             <View style={styles.caddyCorner} pointerEvents="box-none">
               {ownedCaddy ? (
                 <View style={styles.caddyOwned}>
-                  <PackFan
-                    name={CADDY_PACK.name}
-                    count={CADDY_CARDS.length}
-                    cards={CADDY_CARDS}
-                    width={83}
-                    showLabel={false}
+                  <Switch
+                    value={includeCaddies}
+                    onValueChange={(v) => setPackEnabled('caddy', v)}
+                    trackColor={{ true: colors.primary, false: 'rgba(255,255,255,0.35)' }}
+                    thumbColor={colors.white}
                   />
-                  <View style={styles.caddyToggleCol}>
-                    <Switch
-                      value={includeCaddies}
-                      onValueChange={(v) => setPackEnabled('caddy', v)}
-                      trackColor={{ true: colors.primary, false: 'rgba(255,255,255,0.35)' }}
-                      thumbColor={colors.white}
-                    />
-                    <Text style={styles.caddyToggleLabel}>Use caddies to improve poker hands</Text>
-                  </View>
+                  <Text style={styles.caddyToggleLabel}>Use caddies to improve poker hands</Text>
                 </View>
               ) : (
                 <Pressable onPress={() => setCaddyOpen(true)} style={({ pressed }) => [styles.caddyDeck, pressed && styles.pressed]}>
@@ -151,7 +140,6 @@ const styles = StyleSheet.create({
   caddyHint: { flex: 1, color: colors.text, fontSize: 13, fontWeight: '700', textAlign: 'left' },
   pressed: { opacity: 0.75 },
   // Owned: fan on the left, the on/off toggle stacked to its right, bottom-aligned with the fan.
-  caddyOwned: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'flex-start', gap: spacing.md },
-  caddyToggleCol: { alignItems: 'center', gap: 2 },
-  caddyToggleLabel: { color: colors.text, fontSize: 13, fontWeight: '800' },
+  caddyOwned: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  caddyToggleLabel: { flex: 1, color: colors.text, fontSize: 14, fontWeight: '800' },
 });

@@ -12,7 +12,7 @@ export function HolesScreen() {
   const setHoles = useGame((s) => s.setHoles);
   const goTo = useGame((s) => s.goTo);
   const beginOpenPack = useGame((s) => s.beginOpenPack);
-  const hasOpenedFirstPack = useGame((s) => s.ownedPacks['white-tees']);
+  const hasOpenedFirstPack = useGame((s) => s.ownedPacks['standard']);
 
   const gap = spacing.md;
   const squareSize = Math.min(width * 0.6, 230);
@@ -24,7 +24,7 @@ export function HolesScreen() {
     // count), then continue to the ready-to-play Overview. Afterwards it's owned, so we go
     // straight to the Overview.
     if (!hasOpenedFirstPack) {
-      beginOpenPack('white-tees', { onboarding: true });
+      beginOpenPack('standard', { onboarding: true });
     } else {
       goTo('overview');
     }

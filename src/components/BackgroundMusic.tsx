@@ -10,7 +10,6 @@ const PRE_ROUND_STEPS = new Set<Step>([
   'count',
   'names',
   'holes',
-  'mode',
   'overview',
 ]);
 
@@ -22,7 +21,7 @@ const FADE_MS = 45; // tick interval
  * out when a round starts (Start Round → step 'round'). Volume/mute come from the store.
  */
 export function BackgroundMusic() {
-  const player = useAudioPlayer(require('../../assets/game-music.mp3'));
+  const player = useAudioPlayer(require('../../assets/audio/game-music.mp3'));
   const step = useGame((s) => s.step);
   const musicVolume = useGame((s) => s.musicVolume);
   const musicMuted = useGame((s) => s.musicMuted);

@@ -3,7 +3,7 @@ import { Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useGame } from '../store/gameStore';
 
-const HOW_TO_PLAY = require('../../assets/caddypoker-how-to-play.mp4');
+const HOW_TO_PLAY = require('../../assets/video/caddypoker-how-to-play.mp4');
 
 /** Plays the how-to-play video full screen. Closes on the ✕, or auto-returns when it ends. */
 export function HowToPlayScreen() {

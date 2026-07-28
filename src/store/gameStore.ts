@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { buildDrawPool, drawDistinct, cardById, type GameMode } from '../data/cards';
-import { NO_PACKS_OWNED, ALL_PACKS_OWNED, type PackId } from '../data/packs';
+import { buildDrawPool, drawDistinct, cardById } from '../data/cards';
+import { NO_PACKS_OWNED, ALL_PACKS_OWNED, CHALLENGE_PACK_IDS, type PackId } from '../data/packs';
 import { drawCaddies, caddyEffect, caddyById } from '../data/caddyCards';
 import { buildDeck, shuffle, evaluateHand, pickWinners, type PokerCard } from '../data/pokerDeck';
 import { track, startGame, registerConfig } from '../analytics';
@@ -15,7 +15,6 @@ export type Step =
   | 'count'
   | 'names'
   | 'holes'
-  | 'mode'
   | 'overview'
   | 'round'
   | 'scorecard'
@@ -37,7 +36,7 @@ export const MATCHUP_REWARD = 2;
 /** Most virtual cards dealt to one player (fits a 6×3 grid). */
 export const MAX_POKER_CARDS = 18;
 
-type MatchupState = { cardId: string; winner: number | null };
+type MatchupState = { cardId: string; winners: number[] };
 
 /** One player's line in a saved game record. */
 export type GameHistoryPlayer = {
@@ -69,13 +68,10 @@ type GameState = {
   players: string[]; // length 2–4
   avatars: number[]; // golfer character index per player
   holes: 9 | 18;
-  mode: GameMode;
   // The game has a single finale: the in-app virtual poker deck. These two flags are now constant
   // (virtual on, challenges-only off) but retained so the scorecard/finale plumbing is unchanged.
   noPokerDeck: boolean; // always false — retained for the scorecard's end-of-round wording
   useVirtualPokerDeck: boolean; // always true — the only finale
-  includeMatchups: boolean; // include head-to-head matchup cards in the draw pool
-  includeWhite: boolean; // include the white-tees cards in the draw pool (pack in-play toggle)
   includeCaddies: boolean; // effective this-game caddy inclusion (owned caddy pack AND enabled)
   // Saved default (persists across games) for whether caddies are used; set via the caddy pack.
   defaultIncludeCaddies: boolean; // seeds includeCaddies each new game (gated by caddy pack ownership)
@@ -84,9 +80,11 @@ type GameState = {
   musicMuted: boolean; // background-music mute toggle
 
   // ---- card packs ----
-  // Ownership is the source of truth for which cards are available (see buildDrawPool). The
-  // in-play toggles are the existing `mode` (black-tees) and `includeMatchups` fields.
+  // Ownership is the source of truth for which cards are available (see buildDrawPool); `packEnabled`
+  // is the per-challenge-pack in-play toggle layered on top. Caddy in-play is separate
+  // (`includeCaddies`/`defaultIncludeCaddies`) since it drives the poker finale, not the draw pool.
   ownedPacks: Record<PackId, boolean>;
+  packEnabled: Record<PackId, boolean>; // per-pack in-play toggle (challenge packs)
   // Which pack the openPack screen is currently revealing (transient — not persisted).
   openingPackId: PackId | null;
   // True when the openPack screen is browsing an already-owned pack (skip the flip, show the grid,
@@ -136,8 +134,6 @@ type GameState = {
   setPlayerName: (index: number, name: string) => void;
   setPlayers: (names: string[], avatars: number[]) => void;
   setHoles: (h: 9 | 18) => void;
-  setMode: (m: GameMode) => void;
-  setIncludeMatchups: (v: boolean) => void;
   setIncludeCaddies: (v: boolean) => void;
   setDefaultIncludeCaddies: (v: boolean) => void;
   setShowLiveActivity: (v: boolean) => void;
@@ -175,11 +171,11 @@ type GameState = {
   revealPoker: () => void; // all-in -> reveal
 
   triggerMatchup: (cardId: string) => void;
-  setMatchupWinner: (playerIdx: number) => void;
+  setMatchupWinner: (playerIdx: number) => void; // toggle for multi-winner cards; single-select otherwise
   beginScoring: () => void;
   markResult: (playerIdx: number, result: Result) => void;
   setHoleResult: (hole: number, playerIdx: number, result: Result) => void;
-  setHoleMatchupWinner: (hole: number, winner: number | null) => void;
+  setHoleMatchupWinner: (hole: number, winners: number[]) => void;
   nextHole: () => void;
   reset: () => void;
 
@@ -194,10 +190,8 @@ const DEFAULT_NAMES = ['Player 1', 'Player 2', 'Player 3', 'Player 4'];
 /** Always show 4 cards per hole, regardless of player count. */
 const CARDS_PER_HOLE = 4;
 
-function drawCardsFor(
-  state: Pick<GameState, 'mode' | 'includeMatchups' | 'ownedPacks' | 'includeWhite'>
-): string[] {
-  const pool = buildDrawPool(state.mode, state.includeMatchups, state.ownedPacks, state.includeWhite);
+function drawCardsFor(state: Pick<GameState, 'ownedPacks' | 'packEnabled'>): string[] {
+  const pool = buildDrawPool(state.ownedPacks, state.packEnabled);
   return drawDistinct(pool, CARDS_PER_HOLE).map((c) => c.id);
 }
 
@@ -245,21 +239,19 @@ export const useGame = create<GameState>()(
       players: ['', ''],
       avatars: [],
       holes: 9,
-      mode: 'amateur',
       // Constant finale flags — virtual poker is the only mode.
       noPokerDeck: false,
       useVirtualPokerDeck: true,
-      includeMatchups: true,
-      includeWhite: true,
       includeCaddies: true,
       defaultIncludeCaddies: true,
       showLiveActivity: true,
       musicVolume: 0.6,
       musicMuted: false,
 
-      // Fresh install owns nothing — the first "New Round" forces opening the free White Tees pack.
+      // Fresh install owns nothing — the first "New Round" forces opening the free Standard pack.
       // Upgraders are granted all packs by the persist `migrate` below.
       ownedPacks: { ...NO_PACKS_OWNED },
+      packEnabled: { standard: true, 'the-tips': true, league: true, etiquette: true, mulligans: true, matchups: true, caddy: true },
       openingPackId: null,
       packBrowse: false,
       packOnboarding: false,
@@ -313,8 +305,6 @@ export const useGame = create<GameState>()(
       },
 
       setHoles: (holes) => set({ holes }),
-      setMode: (mode) => set({ mode }),
-      setIncludeMatchups: (includeMatchups) => set({ includeMatchups }),
       setIncludeCaddies: (includeCaddies) => set({ includeCaddies }),
       setDefaultIncludeCaddies: (v) => set({ defaultIncludeCaddies: v, includeCaddies: v }),
       setShowLiveActivity: (showLiveActivity) => set({ showLiveActivity }),
@@ -337,32 +327,36 @@ export const useGame = create<GameState>()(
       grantPack: (id) =>
         set((s) => {
           track('pack_opened', { pack_id: id });
-          // Owning a pack also puts it in play (via the existing in-play toggles), so a
-          // just-opened pack is immediately usable in the next round.
-          const next: Partial<GameState> = { ownedPacks: { ...s.ownedPacks, [id]: true } };
-          if (id === 'black-tees') next.mode = 'pro';
-          if (id === 'matchups') next.includeMatchups = true;
+          // Owning a pack also puts it in play, so a just-opened pack is immediately usable next round.
           if (id === 'caddy') {
-            next.defaultIncludeCaddies = true;
-            next.includeCaddies = true;
+            return {
+              ownedPacks: { ...s.ownedPacks, caddy: true },
+              defaultIncludeCaddies: true,
+              includeCaddies: true,
+            };
           }
-          return next;
+          return {
+            ownedPacks: { ...s.ownedPacks, [id]: true },
+            packEnabled: { ...s.packEnabled, [id]: true },
+          };
         }),
 
       setPackEnabled: (id, enabled) => {
         track('pack_toggle', { pack_id: id, enabled });
-        // Each pack maps to its in-play flag. Challenge packs feed the draw pool; the caddy pack
-        // maps to the persistent caddy setting (and the effective flag for this game).
-        if (id === 'white-tees') set({ includeWhite: enabled });
-        else if (id === 'black-tees') set({ mode: enabled ? 'pro' : 'amateur' });
-        else if (id === 'matchups') set({ includeMatchups: enabled });
-        else if (id === 'caddy') set({ defaultIncludeCaddies: enabled, includeCaddies: enabled });
+        // Challenge packs toggle the draw-pool `packEnabled` map; the caddy pack maps to the
+        // persistent caddy setting (and the effective flag for this game).
+        if (id === 'caddy') set({ defaultIncludeCaddies: enabled, includeCaddies: enabled });
+        else set((s) => ({ packEnabled: { ...s.packEnabled, [id]: enabled } }));
       },
 
       // Dev-only: return to the fresh-install pack state (nothing owned) so the next "New Round"
-      // replays the White Tees onboarding. Also resets the in-play flags to their defaults.
+      // replays the Standard onboarding. Also resets the in-play toggles to their defaults.
       devResetPacks: () =>
-        set({ ownedPacks: { ...NO_PACKS_OWNED }, openingPackId: null, mode: 'amateur', includeMatchups: true }),
+        set({
+          ownedPacks: { ...NO_PACKS_OWNED },
+          openingPackId: null,
+          packEnabled: { standard: true, 'the-tips': true, league: true, etiquette: true, mulligans: true, matchups: true, caddy: true },
+        }),
 
       // Dev-only: wipe everything back to a brand-new-user state — no packs owned, config back to
       // fresh-install defaults, and any in-progress game cleared. (Trial is reset separately.)
@@ -373,14 +367,12 @@ export const useGame = create<GameState>()(
           players: ['', ''],
           avatars: [],
           holes: 9,
-          mode: 'amateur',
           noPokerDeck: false,
           useVirtualPokerDeck: true,
-          includeMatchups: true,
-          includeWhite: true,
           includeCaddies: true,
           defaultIncludeCaddies: true,
           ownedPacks: { ...NO_PACKS_OWNED },
+          packEnabled: { standard: true, 'the-tips': true, league: true, etiquette: true, mulligans: true, matchups: true, caddy: true },
           openingPackId: null,
           packBrowse: false,
           currentHole: 1,
@@ -406,21 +398,20 @@ export const useGame = create<GameState>()(
       startRound: () =>
         set((s) => {
           const players = s.players.map((p, i) => (p.trim() === '' ? DEFAULT_NAMES[i] : p));
-          const firstHole = drawCardsFor({ mode: s.mode, includeMatchups: s.includeMatchups, ownedPacks: s.ownedPacks, includeWhite: s.includeWhite });
+          const firstHole = drawCardsFor({ ownedPacks: s.ownedPacks, packEnabled: s.packEnabled });
           // Caddies only apply if the caddy pack is owned AND enabled. Virtual poker is the only finale.
           const includeCaddies = s.ownedPacks['caddy'] && s.defaultIncludeCaddies;
+          const packsInPlay = CHALLENGE_PACK_IDS.filter((id) => s.ownedPacks[id] && s.packEnabled[id]);
           startGame();
           registerConfig({
-            mode: s.mode,
-            matchups: s.includeMatchups,
+            packs: packsInPlay.join(','),
             caddies: includeCaddies,
             live_activity: s.showLiveActivity,
           });
           track('game_started', {
             players: players.length,
             holes: s.holes,
-            mode: s.mode,
-            matchups: s.includeMatchups,
+            packs: packsInPlay.join(','),
             caddies: includeCaddies,
             live_activity: s.showLiveActivity,
           });
@@ -449,7 +440,7 @@ export const useGame = create<GameState>()(
             track('challenge_selected', {
               card_id: cardId,
               card_name: cardById(cardId)?.name,
-              tee: s.mode,
+              pack: cardById(cardId)?.pack,
             });
           }
           return { assignment: { ...s.assignment, [s.currentHole]: holeAssign } };
@@ -601,7 +592,7 @@ export const useGame = create<GameState>()(
       // Replace the card at `position` with a fresh random draw (different from the current).
       redrawCard: (position) =>
         set((s) => {
-          const pool = buildDrawPool(s.mode, s.includeMatchups, s.ownedPacks, s.includeWhite);
+          const pool = buildDrawPool(s.ownedPacks, s.packEnabled);
           const currentId = s.holeCards[s.currentHole]?.[position];
           const candidates = pool.filter((c) => c.id !== currentId);
           const nextId = drawDistinct(candidates, 1)[0]?.id ?? currentId;
@@ -631,17 +622,22 @@ export const useGame = create<GameState>()(
           track('matchup_played', { card_id: cardId, card_name: cardById(cardId)?.name });
           return {
             phase: 'matchup' as Phase,
-            matchup: { ...s.matchup, [s.currentHole]: { cardId, winner: null } },
+            matchup: { ...s.matchup, [s.currentHole]: { cardId, winners: [] } },
           };
         }),
 
+      // Multi-winner cards toggle each golfer in/out of the winners set; single-winner cards replace.
       setMatchupWinner: (playerIdx) =>
         set((s) => {
           const existing = s.matchup[s.currentHole];
           if (!existing) return {};
-          return {
-            matchup: { ...s.matchup, [s.currentHole]: { ...existing, winner: playerIdx } },
-          };
+          const multi = !!cardById(existing.cardId)?.multiWinner;
+          const winners = multi
+            ? existing.winners.includes(playerIdx)
+              ? existing.winners.filter((w) => w !== playerIdx)
+              : [...existing.winners, playerIdx]
+            : [playerIdx];
+          return { matchup: { ...s.matchup, [s.currentHole]: { ...existing, winners } } };
         }),
 
       beginScoring: () => set({ phase: 'score' }),
@@ -670,19 +666,19 @@ export const useGame = create<GameState>()(
           return { results: { ...s.results, [hole]: holeResults } };
         }),
 
-      // Correct a specific hole's matchup winner (null = no winner).
-      setHoleMatchupWinner: (hole, winner) =>
+      // Correct a specific hole's matchup winners (empty array = no winner).
+      setHoleMatchupWinner: (hole, winners) =>
         set((s) => {
           const existing = s.matchup[hole];
           if (!existing) return {};
-          return { matchup: { ...s.matchup, [hole]: { ...existing, winner } } };
+          return { matchup: { ...s.matchup, [hole]: { ...existing, winners } } };
         }),
 
       nextHole: () =>
         set((s) => {
           if (s.currentHole < s.holes) {
             const next = s.currentHole + 1;
-            const cards = drawCardsFor({ mode: s.mode, includeMatchups: s.includeMatchups, ownedPacks: s.ownedPacks, includeWhite: s.includeWhite });
+            const cards = drawCardsFor({ ownedPacks: s.ownedPacks, packEnabled: s.packEnabled });
             return {
               currentHole: next,
               phase: 'pick' as Phase,
@@ -706,7 +702,7 @@ export const useGame = create<GameState>()(
           players: ['', ''],
           avatars: [],
           holes: 9,
-          // mode (black-tees setting) and ownedPacks are persistent preferences — not reset here.
+          // packEnabled and ownedPacks are persistent preferences — not reset here.
           openingPackId: null,
           currentHole: 1,
           phase: 'pick',
@@ -735,7 +731,7 @@ export const useGame = create<GameState>()(
         for (let hole = 1; hole <= holes; hole++) {
           const m = matchup[hole];
           if (m) {
-            if (m.winner === playerIdx) count += MATCHUP_REWARD;
+            if (m.winners.includes(playerIdx)) count += MATCHUP_REWARD;
             continue;
           }
           if (results[hole]?.[playerIdx] === 'achieved') count++;
@@ -750,7 +746,7 @@ export const useGame = create<GameState>()(
         for (let hole = 1; hole <= holes; hole++) {
           const m = matchup[hole];
           if (m) {
-            if (m.winner === playerIdx) count++;
+            if (m.winners.includes(playerIdx)) count++;
             continue;
           }
           if (results[hole]?.[playerIdx] === 'achieved') count++;
@@ -768,12 +764,15 @@ export const useGame = create<GameState>()(
       name: 'caddy-game',
       // Bump when the persisted round shape changes. `migrate` below preserves player settings
       // across bumps (only the in-progress round is allowed to be dropped).
-      version: 9,
+      version: 10,
       // v6: card packs. Existing users are granted ALL packs so they're never forced through
       //     onboarding and keep their pro/matchup settings; fresh installs own nothing.
       // v8: game simplified to virtual-only (game-mode picker removed); caddies became a pack.
       //     Grant the caddy pack to existing users so their caddies keep working.
       // v9: on-device game history added; default existing users to an empty list.
+      // v10: v3 content — 6 semantic packs replace white/black/matchups; `packEnabled` map replaces
+      //      mode/includeMatchups/includeWhite; matchups gained multi-winner. Old card ids no longer
+      //      exist, so any in-progress round is cleared.
       migrate: (persisted: any, version) => {
         let p = persisted;
         if (p && version < 5) {
@@ -793,6 +792,57 @@ export const useGame = create<GameState>()(
         if (p && version < 9) {
           p = { ...p, history: p.history ?? [] };
         }
+        if (p && version < 10) {
+          const old = p.ownedPacks ?? {};
+          const hadStarter = !!old['white-tees']; // a real upgrader (already onboarded)
+          const ownedPacks = {
+            standard: hadStarter,
+            'the-tips': !!old['black-tees'],
+            league: hadStarter, // grant new content to upgraders (v6/v8 pattern)
+            etiquette: hadStarter,
+            mulligans: hadStarter,
+            matchups: !!old['matchups'],
+            caddy: !!old['caddy'],
+          };
+          const packEnabled = {
+            standard: p.includeWhite ?? true,
+            'the-tips': p.mode === 'pro',
+            league: true,
+            etiquette: true,
+            mulligans: true,
+            matchups: p.includeMatchups ?? true,
+            caddy: true,
+          };
+          const wasMidRound = ['overview', 'round', 'scorecard', 'results', 'poker'].includes(p.step);
+          p = {
+            ...p,
+            ownedPacks,
+            packEnabled,
+            // In-progress round holds now-nonexistent card ids — clear it back to a clean slate.
+            step: wasMidRound ? 'home' : p.step,
+            transition: null,
+            currentHole: 1,
+            phase: 'pick',
+            pickTurn: 0,
+            pickOrder: [0, 1],
+            holeCards: {},
+            assignment: {},
+            results: {},
+            matchup: {},
+            caddyCards: [],
+            pokerPhase: 'intro',
+            pokerTurn: -1,
+            pokerDeck: [],
+            pokerDealt: 0,
+            pokerCaddyAssignment: {},
+            pokerHands: {},
+            pokerSelection: {},
+            pokerMulliganOffer: {},
+          };
+          delete p.mode;
+          delete p.includeMatchups;
+          delete p.includeWhite;
+        }
         return p;
       },
       storage: createJSONStorage(() => AsyncStorage),
@@ -802,17 +852,15 @@ export const useGame = create<GameState>()(
         players: s.players,
         avatars: s.avatars,
         holes: s.holes,
-        mode: s.mode,
         noPokerDeck: s.noPokerDeck,
         useVirtualPokerDeck: s.useVirtualPokerDeck,
-        includeMatchups: s.includeMatchups,
-        includeWhite: s.includeWhite,
         includeCaddies: s.includeCaddies,
         defaultIncludeCaddies: s.defaultIncludeCaddies,
         showLiveActivity: s.showLiveActivity,
         musicVolume: s.musicVolume,
         musicMuted: s.musicMuted,
         ownedPacks: s.ownedPacks, // openingPackId is transient — intentionally not persisted
+        packEnabled: s.packEnabled,
         currentHole: s.currentHole,
         phase: s.phase,
         pickTurn: s.pickTurn,

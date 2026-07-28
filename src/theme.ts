@@ -33,6 +33,16 @@ export const radius = {
   card: 18,
 } as const;
 
+// Baloo 2 (loaded in App.tsx via expo-font). Family names match the useFonts keys. Used for the
+// composed challenge-card faces; the rest of the app uses the system font + fontWeight.
+export const fonts = {
+  regular: 'Baloo2-Regular',
+  medium: 'Baloo2-Medium',
+  semibold: 'Baloo2-SemiBold',
+  bold: 'Baloo2-Bold',
+  extrabold: 'Baloo2-ExtraBold',
+} as const;
+
 // Width:height ratio of the supplied card artwork (696 × 1038). All card frames use this
 // so the real images render without cropping or letterboxing.
 export const CARD_RATIO = 696 / 1038;

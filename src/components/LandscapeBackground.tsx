@@ -18,7 +18,7 @@ export function LandscapeBackground({ cloudOffset = 0, hideClouds = false }: Pro
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
       <Image
-        source={require('../../assets/cp-landscaping.png')}
+        source={require('../../assets/scenery/cp-landscaping.png')}
         style={{ position: 'absolute', top: 0, left: (width - bgWidth) / 2, width: bgWidth, height }}
         resizeMode="cover"
       />

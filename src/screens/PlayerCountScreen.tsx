@@ -187,7 +187,7 @@ export function PlayerCountScreen() {
           style={[styles.hintWrap, { top: height * 0.52 }]}
         >
           <Image
-            source={require('../../assets/up-arrow.png')}
+            source={require('../../assets/ui/up-arrow.png')}
             resizeMode="contain"
             style={[styles.hintArrow, added.length === 1 && styles.hintArrowFlipped]}
           />

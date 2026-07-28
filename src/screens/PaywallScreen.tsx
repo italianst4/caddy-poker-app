@@ -81,7 +81,7 @@ export function PaywallScreen() {
         </View>
         <View style={styles.body}>
           <Image
-            source={require('../../assets/caddypoker-logo.png')}
+            source={require('../../assets/branding/caddypoker-logo.png')}
             style={styles.logo}
             resizeMode="contain"
           />

@@ -10,10 +10,9 @@ import {
 import { useState } from 'react';
 import { LandscapeBackground } from '../components/LandscapeBackground';
 import { ScreenHeader } from '../components/ScreenHeader';
-import { PackFan } from '../components/PackFan';
 import { PackGridOverlay } from '../components/PackGridOverlay';
 import { GOLFERS, MAX_GOLFER_RATIO } from '../data/golfers';
-import { CHALLENGE_PACK_IDS, cardsInPack, packById, type PackId } from '../data/packs';
+import { CHALLENGE_PACK_IDS, PACK_THEME, cardsInPack, packById, type PackId } from '../data/packs';
 import { useGame } from '../store/gameStore';
 import { playIronHit } from '../sounds';
 import { colors, radius, spacing } from '../theme';
@@ -24,13 +23,10 @@ export function OverviewScreen() {
   const avatars = useGame((s) => s.avatars);
   const holes = useGame((s) => s.holes);
   const ownedPacks = useGame((s) => s.ownedPacks);
-  const mode = useGame((s) => s.mode);
-  const includeMatchups = useGame((s) => s.includeMatchups);
-  const includeWhite = useGame((s) => s.includeWhite);
+  const packEnabled = useGame((s) => s.packEnabled);
   const startRound = useGame((s) => s.startRound);
   const goTo = useGame((s) => s.goTo);
   const editGolfer = useGame((s) => s.editGolfer);
-  const goToCardPacks = useGame((s) => s.goToCardPacks);
 
   const [browsePack, setBrowsePack] = useState<PackId | null>(null);
 
@@ -47,10 +43,10 @@ export function OverviewScreen() {
   // The navy horizon sits ~79.8% down the landscape; keep the Start button below it (in the grass).
   const horizonY = Math.round(height * 0.798);
 
-  const packEnabled = (id: PackId) =>
-    id === 'white-tees' ? includeWhite : id === 'black-tees' ? mode === 'pro' : includeMatchups;
   // Only challenge packs are ever "in play" here — caddies are handled at the poker finale.
-  const inPlay = CHALLENGE_PACK_IDS.filter((id) => ownedPacks[id] && packEnabled(id));
+  const inPlay = CHALLENGE_PACK_IDS.filter((id) => ownedPacks[id] && packEnabled[id]);
+  // In-play packs are shown as color pills, 3 to a row.
+  const chipW = (width - spacing.lg * 2 - spacing.sm * 2) / 3;
 
   return (
     <View style={styles.root}>
@@ -89,28 +85,23 @@ export function OverviewScreen() {
       <View style={[styles.packsSection, { bottom: height - horizonY + spacing.md }]}>
         <View style={styles.packsHeaderRow}>
           <Text style={styles.packsLabel}>Challenge cards in play</Text>
-          <Pressable
-            onPress={() => goToCardPacks('overview')}
-            style={({ pressed }) => [styles.changeBtn, pressed && styles.pressed]}
-          >
-            <Text style={styles.changeText}>+ Add</Text>
-          </Pressable>
         </View>
         <View style={styles.packsRow}>
           {inPlay.map((id) => {
             const p = packById(id);
+            const theme = PACK_THEME[id];
             return (
               <Pressable
                 key={id}
                 onPress={() => setBrowsePack(id)}
-                style={({ pressed }) => pressed && styles.pressed}
+                style={({ pressed }) => [styles.packChip, { width: chipW, backgroundColor: theme.band }, pressed && styles.pressed]}
               >
-                <PackFan
-                  name={p.gridName ?? p.name}
-                  count={cardsInPack(id).length}
-                  cards={cardsInPack(id)}
-                  width={Math.min(width * 0.26, 96)}
-                />
+                <Text style={[styles.packChipName, { color: theme.ink }]} numberOfLines={1} adjustsFontSizeToFit>
+                  {p.name}
+                </Text>
+                <View style={styles.packBadge}>
+                  <Text style={styles.packBadgeText}>{cardsInPack(id).length}</Text>
+                </View>
               </Pressable>
             );
           })}
@@ -118,7 +109,7 @@ export function OverviewScreen() {
       </View>
 
       {/* Start button (with the hole count), pinned just below the navy horizon (in the grass). */}
-      <View style={[styles.footer, { top: horizonY + spacing.md }]}>
+      <View style={[styles.footer, { top: horizonY + spacing.xl * 1.6 }]}>
         <Pressable
           onPress={onStart}
           style={({ pressed }) => [styles.startBtn, pressed && styles.startPressed]}
@@ -169,8 +160,8 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
   },
-  // Absolute so its bottom (the decks) can be pinned just above the horizon (top set inline).
-  packsSection: { position: 'absolute', left: 0, right: 0, paddingLeft: spacing.lg, gap: spacing.sm },
+  // Absolute so its bottom (the pills) can be pinned just above the horizon (top set inline).
+  packsSection: { position: 'absolute', left: 0, right: 0, paddingHorizontal: spacing.lg, gap: spacing.sm },
   packsHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   packsLabel: {
     textAlign: 'left',
@@ -181,15 +172,37 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
   },
-  packsRow: { flexDirection: 'row', gap: spacing.md, alignItems: 'flex-start' },
-  // Solid gold "chip" — distinct from the dark, gold-outlined name pills on the fans.
-  changeBtn: {
-    borderRadius: radius.md,
-    backgroundColor: colors.gold,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
+  // Up to 3 pills per row; badges overflow the top-right corner, so leave a little top margin.
+  packsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.xs },
+  // Pack pill — background is the pack's brand color (PACK_THEME.band), text is its ink.
+  packChip: {
+    borderRadius: 999,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
   },
-  changeText: { color: colors.primaryText, fontSize: 13, fontWeight: '900', letterSpacing: 0.5 },
+  packChipName: { fontSize: 14, fontWeight: '900', textAlign: 'center' },
+  // Card-count badge pinned to the pill's top-right corner — one consistent color for every pack.
+  packBadge: {
+    position: 'absolute',
+    top: -7,
+    right: -7,
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    paddingHorizontal: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.gold,
+    borderWidth: 1.5,
+    borderColor: colors.primaryText,
+  },
+  packBadgeText: { fontSize: 12, fontWeight: '900', color: colors.primaryText },
   // Pinned below the horizon (top set inline); spans the width and centers the button + holes.
   footer: {
     position: 'absolute',

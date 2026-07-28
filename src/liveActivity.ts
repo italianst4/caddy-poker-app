@@ -33,8 +33,8 @@ export function buildLiveActivityPayload(s: GameState): LiveActivityPayload {
     const avatarIndex = Math.max(0, Math.min(7, s.avatars[i] ?? i));
     const cards = s.pokerCardCount(i); // running poker-card total so far
     if (matchup) {
-      // Head-to-head hole: everyone shares the one challenge (shown once); winner is marked.
-      const result = matchup.winner === i ? 'achieved' : '';
+      // Head-to-head hole: everyone shares the one challenge (shown once); winners are marked.
+      const result = matchup.winners.includes(i) ? 'achieved' : '';
       return { name, avatarIndex, challenge: '', result, cards };
     }
     const position = s.assignment[hole]?.[i];

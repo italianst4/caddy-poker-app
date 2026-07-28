@@ -4,7 +4,7 @@ import type { Pack } from '../data/packs';
 /** w/h of the pack front artwork (995 × 1555) — the box matches it so overlays align to the art. */
 export const PACK_RATIO = 995 / 1555;
 
-const LOGO = require('../../assets/caddypoker-logo.png');
+const LOGO = require('../../assets/branding/caddypoker-logo.png');
 
 type Props = {
   pack: Pack;

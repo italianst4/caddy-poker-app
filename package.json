@@ -12,6 +12,7 @@
     "expo-build-properties": "~1.0.10",
     "expo-device": "~8.0.10",
     "expo-file-system": "~19.0.23",
+    "expo-font": "~14.0.12",
     "expo-haptics": "~15.0.8",
     "expo-linear-gradient": "~15.0.8",
     "expo-localization": "~17.0.9",
@@ -43,7 +44,8 @@
     "ios": "expo run:ios",
     "release:ios": "expo run:ios --device --configuration Release",
     "web": "expo start --web",
-    "assets:alpha": "scripts/make-alpha-videos.sh"
+    "assets:alpha": "scripts/make-alpha-videos.sh",
+    "gen:cards": "node scripts/gen-cards.js"
   },
   "private": true
 }

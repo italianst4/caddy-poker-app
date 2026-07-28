@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { useFonts } from 'expo-font';
 import { useGame, type Step } from './src/store/gameStore';
 import { initEntitlements, useHasAccess } from './src/entitlements';
 import { StackHost } from './src/components/StackHost';
@@ -17,7 +18,6 @@ import { PaywallScreen } from './src/screens/PaywallScreen';
 import { PlayerCountScreen } from './src/screens/PlayerCountScreen';
 import { NamesScreen } from './src/screens/NamesScreen';
 import { HolesScreen } from './src/screens/HolesScreen';
-import { ModeScreen } from './src/screens/ModeScreen';
 import { OverviewScreen } from './src/screens/OverviewScreen';
 import { RoundScreen } from './src/screens/RoundScreen';
 import { ResultsScreen } from './src/screens/ResultsScreen';
@@ -31,6 +31,14 @@ export default function App() {
   const hasAccess = useHasAccess();
   const [hydrated, setHydrated] = useState(useGame.persist.hasHydrated());
   const [entReady, setEntReady] = useState(false);
+  // Baloo 2 (card typography), bundled for offline use and loaded before first paint.
+  const [fontsLoaded] = useFonts({
+    'Baloo2-Regular': require('./assets/fonts/Baloo2-Regular.ttf'),
+    'Baloo2-Medium': require('./assets/fonts/Baloo2-Medium.ttf'),
+    'Baloo2-SemiBold': require('./assets/fonts/Baloo2-SemiBold.ttf'),
+    'Baloo2-Bold': require('./assets/fonts/Baloo2-Bold.ttf'),
+    'Baloo2-ExtraBold': require('./assets/fonts/Baloo2-ExtraBold.ttf'),
+  });
 
   useEffect(() => {
     // Wait for persisted round state to load before rendering (so we resume correctly).
@@ -47,7 +55,7 @@ export default function App() {
   const GATED = !UNGATED.includes(step);
   const routeKey: Step = !hasAccess && GATED ? 'paywall' : step;
 
-  if (!hydrated || !entReady) {
+  if (!hydrated || !entReady || !fontsLoaded) {
     return (
       <View style={styles.loading}>
         <StatusBar style="light" />
@@ -94,8 +102,6 @@ function renderStep(step: Step) {
       return <NamesScreen />;
     case 'holes':
       return <HolesScreen />;
-    case 'mode':
-      return <ModeScreen />;
     case 'overview':
       return <OverviewScreen />;
     case 'round':

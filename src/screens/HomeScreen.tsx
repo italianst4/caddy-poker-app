@@ -118,7 +118,7 @@ export function HomeScreen() {
 
         <View style={[styles.center, { paddingTop: height * 0.08 }]}>
           <Animated.Image
-            source={require('../../assets/caddypoker-logo.png')}
+            source={require('../../assets/branding/caddypoker-logo.png')}
             style={[styles.logo, { width: logoSize, height: logoSize }, logoStyle]}
             resizeMode="contain"
           />

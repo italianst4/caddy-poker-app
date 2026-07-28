@@ -12,7 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { CARD_RATIO, colors, radius } from '../theme';
 
 /** Shared challenge card back artwork (same for every card, so a matchup is hidden until flipped). */
-const CHALLENGE_BACK: ImageSourcePropType = require('../../assets/cards/challenge-card-back.png');
+const CHALLENGE_BACK: ImageSourcePropType = require('../../assets/cards/backs/challenge-card-back.png');
 
 type Props = {
   onPress?: () => void;

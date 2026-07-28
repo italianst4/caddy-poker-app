@@ -57,7 +57,7 @@ export function CloudLayer({ offset = 0 }: CloudLayerProps) {
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
       <Cloud
-        source={require('../../assets/cloud-1.png')}
+        source={require('../../assets/scenery/cloud-1.png')}
         width={150}
         height={150 / 2.093}
         top={90 + shift}
@@ -67,7 +67,7 @@ export function CloudLayer({ offset = 0 }: CloudLayerProps) {
         opacity={0.92}
       />
       <Cloud
-        source={require('../../assets/cloud-2.png')}
+        source={require('../../assets/scenery/cloud-2.png')}
         width={110}
         height={110 / 1.693}
         top={190 + shift}
